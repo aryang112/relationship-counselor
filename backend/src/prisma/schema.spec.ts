@@ -1,16 +1,16 @@
-import { DMMF } from '@prisma/client/runtime/library';
+import { Prisma } from '@prisma/client';
 
-describe('Prisma schema metadata', () => {
+describe('Prisma schema validation', () => {
   it('contains core models required for mediation flow', () => {
-    const modelNames = DMMF.datamodel.models.map((model) => model.name);
+    const modelNames = Prisma.dmmf.datamodel.models.map((model) => model.name);
 
     expect(modelNames).toEqual(
-      expect.arrayContaining(['Couple', 'Session', 'Interview']),
+      expect.arrayContaining(['User', 'Couple', 'Session', 'Interview']),
     );
   });
 
   it('includes user relations for couples and interviews', () => {
-    const userModel = DMMF.datamodel.models.find(
+    const userModel = Prisma.dmmf.datamodel.models.find(
       (model) => model.name === 'User',
     );
 
