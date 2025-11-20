@@ -1,0 +1,23 @@
+// Prisma schema for AI Relationship Mediation App
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// User model - represents individual users in the app
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String   // Will be hashed
+  name      String
+  timezone  String   @default("UTC")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  @@map("users")
+}
