@@ -1,14 +1,19 @@
-import { Prisma } from '@prisma/client';
+import { dmmf as PrismaDMMF } from '@prisma/client/runtime/library';
 
-describe('Prisma schema', () => {
-  it('contains Couple, Session, and Interview models', () => {
-    expect(Prisma.ModelName.Couple).toBe('Couple');
-    expect(Prisma.ModelName.Session).toBe('Session');
-    expect(Prisma.ModelName.Interview).toBe('Interview');
+describe('Prisma schema metadata', () => {
+  it('contains core models required for mediation flow', () => {
+    const modelNames = PrismaDMMF.datamodel.models.map((model) => model.name);
+
+    expect(modelNames).toEqual(
+      expect.arrayContaining(['Couple', 'Session', 'Interview']),
+    );
   });
 
-  it('exposes relations on the User model', () => {
-    const userModel = Prisma.dmmf.datamodel.models.find((model) => model.name === 'User');
+  it('includes user relations for couples and interviews', () => {
+    const userModel = PrismaDMMF.datamodel.models.find(
+      (model) => model.name === 'User',
+    );
+
     expect(userModel).toBeDefined();
     expect(userModel?.fields.map((field) => field.name)).toEqual(
       expect.arrayContaining(['couplesAsUserA', 'couplesAsUserB', 'interviews']),
