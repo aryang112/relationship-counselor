@@ -11,13 +11,71 @@ datasource db {
 
 // User model - represents individual users in the app
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
-  password  String   // Will be hashed
+  id        String      @id @default(uuid())
+  email     String      @unique
+  password  String      // Will be hashed
   name      String
-  timezone  String   @default("UTC")
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  timezone  String      @default("UTC")
+  createdAt DateTime    @default(now()) @map("created_at")
+  updatedAt DateTime    @updatedAt @map("updated_at")
+
+  couplesAsUserA Couple[]   @relation("UserACouples")
+  couplesAsUserB Couple[]   @relation("UserBCouples")
+  interviews     Interview[]
 
   @@map("users")
+}
+
+model Couple {
+  id                String   @id @default(uuid())
+  userAId           String   @map("user_a_id")
+  userBId           String?  @map("user_b_id")
+  inviteToken       String?  @unique @map("invite_token")
+  agreementSignedAt DateTime? @map("agreement_signed_at")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  userA             User     @relation("UserACouples", fields: [userAId], references: [id])
+  userB             User?    @relation("UserBCouples", fields: [userBId], references: [id])
+  sessions          Session[]
+
+  @@unique([userAId, userBId])
+  @@index([userAId])
+  @@index([userBId])
+  @@map("couples")
+}
+
+model Session {
+  id          String   @id @default(uuid())
+  coupleId    String   @map("couple_id")
+  status      String
+  initiatedBy String   @map("initiated_by")
+  topic       String?
+  context     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  couple      Couple   @relation(fields: [coupleId], references: [id])
+  interviews  Interview[]
+
+  @@index([coupleId])
+  @@map("sessions")
+}
+
+model Interview {
+  id          String   @id @default(uuid())
+  sessionId   String   @map("session_id")
+  userId      String   @map("user_id")
+  responses   Json
+  notes       String?
+  completedAt DateTime? @map("completed_at")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  session     Session  @relation(fields: [sessionId], references: [id])
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@index([sessionId])
+  @@index([userId])
+  @@map("interviews")
 }
