@@ -4,12 +4,21 @@ import {
   Injectable,
   NotFoundException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma.service';
 import { CouplesService } from '../couples/couples.service';
 import { StartSessionDto } from './dto/start-session.dto';
 import { SubmitInterviewDto } from './dto/submit-interview.dto';
 
 const FINAL_SESSION_STATUSES = ['resolved', 'abandoned'];
+const ALLOWED_TRANSITIONS: Record<string, string[]> = {
+  initiated: ['in_progress', 'abandoned'],
+  in_progress: ['unpacking_ready', 'abandoned'],
+  unpacking_ready: ['reconnection', 'abandoned'],
+  reconnection: ['resolved', 'abandoned'],
+  resolved: [],
+  abandoned: [],
+};
 
 @Injectable()
 export class SessionsService {
@@ -26,36 +35,95 @@ export class SessionsService {
     }
 
     if (!couple.agreementSignedAt) {
-      throw new ConflictException('Both partners must sign the agreement before starting a session.');
+      throw new ForbiddenException('Both partners must sign the agreement before starting a session. Please complete the agreement first.');
     }
 
-    const existingSession = await this.prisma.session.findFirst({
-      where: {
-        coupleId: couple.id,
-        status: { notIn: FINAL_SESSION_STATUSES },
-      },
-    });
+    let session;
+    try {
+      session = await this.prisma.$transaction(
+        async (tx) => {
+          const existingSession = await tx.session.findFirst({
+            where: {
+              coupleId: couple.id,
+              status: { notIn: FINAL_SESSION_STATUSES },
+            },
+            select: { id: true },
+          });
 
-    if (existingSession) {
-      throw new ConflictException('There is already an active session.');
+          if (existingSession) {
+            throw new ConflictException(
+              'There is already an active session. Please resolve or abandon it before starting another.',
+            );
+          }
+
+          return tx.session.create({
+            data: {
+              coupleId: couple.id,
+              status: 'initiated',
+              initiatedBy: userId,
+              topic: dto.topic,
+              context: dto.context,
+            },
+            include: {
+              interviews: true,
+            },
+          });
+        },
+        { isolationLevel: Prisma.TransactionIsolationLevel.Serializable },
+      );
+    } catch (error) {
+      if (
+        error instanceof Prisma.PrismaClientKnownRequestError &&
+        error.code === 'P2034'
+      ) {
+        throw new ConflictException(
+          'There is already an active session. Please resolve or abandon it before starting another.',
+        );
+      }
+      throw error;
     }
 
-    return this.prisma.session.create({
-      data: {
-        coupleId: couple.id,
-        status: 'initiated',
-        initiatedBy: userId,
-        topic: dto.topic,
-        context: dto.context,
-      },
-      include: {
-        interviews: true,
-      },
-    });
+    // TODO: NOTIFICATION - Send notification to partner when session is initiated
+    // When Partner A starts a session, Partner B should receive:
+    // - Push notification: "{Partner A name} wants to work through something with you 💙"
+    // - Email notification with same message and [Join the session] link
+    // Implementation:
+    //   const partnerId = couple.userAId === userId ? couple.userBId : couple.userAId;
+    //   const initiator = await this.prisma.user.findUnique({ where: { id: userId } });
+    //   await this.notificationsService.send({
+    //     userId: partnerId,
+    //     type: 'session_initiated',
+    //     title: `${initiator.name} wants to work through something with you 💙`,
+    //     body: 'Tap to participate',
+    //     channels: ['push', 'email'],
+    //     data: { sessionId: session.id }
+    //   });
+    // See spec: relationship-app-detailed-design-spec.md - Flow 2: Starting a Mediation Session
+
+    return session;
   }
 
   async getSession(sessionId: string, userId: string) {
-    return this.ensureSessionAccess(sessionId, userId);
+    const session = await this.ensureSessionAccess(sessionId, userId);
+
+    // Privacy protection: Only return interview metadata, not responses
+    // Interview responses should only be accessible:
+    // 1. To the author of the interview (via separate endpoint if needed)
+    // 2. During the unpacking phase when both partners have completed
+    const sanitizedInterviews = session.interviews.map((interview) => ({
+      id: interview.id,
+      userId: interview.userId,
+      sessionId: interview.sessionId,
+      completedAt: interview.completedAt,
+      createdAt: interview.createdAt,
+      updatedAt: interview.updatedAt,
+      // Omit: responses, notes (private until unpacking)
+    }));
+
+    return {
+      ...session,
+      interviews: sanitizedInterviews,
+    };
   }
 
   async submitInterview(
@@ -69,21 +137,16 @@ export class SessionsService {
       where: { sessionId, userId },
     });
 
-    const interview = existingInterview
-      ? await this.prisma.interview.update({
-          where: { id: existingInterview.id },
-          data: {
-            responses: dto.responses,
-            notes: dto.notes,
-            completedAt: new Date(),
-          },
-        })
-      : await this.prisma.interview.create({
-          data: {
-            sessionId,
-            userId,
-            responses: dto.responses,
-            notes: dto.notes,
+    if (existingInterview) {
+      throw new ConflictException('You have already completed this interview.');
+    }
+
+    const interview = await this.prisma.interview.create({
+        data: {
+          sessionId,
+          userId,
+          responses: dto.responses,
+          notes: dto.notes,
             completedAt: new Date(),
           },
         });
@@ -152,13 +215,27 @@ export class SessionsService {
   async getAllSessions(userId: string) {
     const couple = await this.couplesService.getCoupleForUser(userId);
 
-    return this.prisma.session.findMany({
+    const sessions = await this.prisma.session.findMany({
       where: { coupleId: couple.id },
       include: {
         interviews: true,
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Privacy protection: Sanitize interview responses in list view
+    return sessions.map((session) => ({
+      ...session,
+      interviews: (session.interviews ?? []).map((interview) => ({
+        id: interview.id,
+        userId: interview.userId,
+        sessionId: interview.sessionId,
+        completedAt: interview.completedAt,
+        createdAt: interview.createdAt,
+        updatedAt: interview.updatedAt,
+        // Omit: responses, notes (private until unpacking)
+      })),
+    }));
   }
 
   async updateSessionStatus(sessionId: string, userId: string, newStatus: string) {
@@ -173,6 +250,13 @@ export class SessionsService {
     // Prevent reverting from final statuses
     if (FINAL_SESSION_STATUSES.includes(session.status) && newStatus !== session.status) {
       throw new ConflictException('Cannot update status of a completed session.');
+    }
+
+    const allowedNextStatuses = ALLOWED_TRANSITIONS[session.status] || [];
+    if (!allowedNextStatuses.includes(newStatus) && newStatus !== session.status) {
+      throw new ConflictException(
+        `Cannot transition from ${session.status} to ${newStatus}`,
+      );
     }
 
     return this.prisma.session.update({
@@ -194,6 +278,29 @@ export class SessionsService {
       interviews.some((interview) => interview.userId === session.couple.userBId);
 
     if (hasUserA && hasUserB) {
+      // TODO: NOTIFICATION - Send notifications when unpacking is ready
+      // When both partners complete interviews, both should receive:
+      // - Push notification: "Your unpacking is ready! 💙"
+      // - Email notification with [View insights] link
+      // Implementation:
+      //   await this.notificationsService.sendToCouple(session.couple.id, {
+      //     type: 'unpacking_ready',
+      //     title: 'Your unpacking is ready! 💙',
+      //     body: 'See insights together',
+      //     channels: ['push', 'email'],
+      //     data: { sessionId: session.id }
+      //   });
+      // See spec: relationship-app-detailed-design-spec.md - Flow 4: AI Unpacking Generation & Viewing
+
+      // TODO: WORKER - Queue unpacking generation job
+      // When both interviews are complete, trigger AI unpacking generation:
+      //   await this.unpackingQueue.add('generate-unpacking', {
+      //     sessionId: session.id,
+      //     interviewA: interviews.find(i => i.userId === session.couple.userAId),
+      //     interviewB: interviews.find(i => i.userId === session.couple.userBId)
+      //   });
+      // Worker will generate insights using OpenAI and store in unpacking table
+
       return 'unpacking_ready';
     }
 

@@ -3,6 +3,7 @@ import {
   Controller,
   Get,
   Param,
+  ParseUUIDPipe,
   Patch,
   Post,
   Request,
@@ -30,28 +31,33 @@ export class SessionsController {
   }
 
   @Get(':id')
-  getSession(@Request() req, @Param('id') id: string) {
+  getSession(@Request() req, @Param('id', ParseUUIDPipe) id: string) {
     return this.sessionsService.getSession(id, req.user.id);
   }
 
   @Post(':id/interview')
-  submitInterview(
+  async submitInterview(
     @Request() req,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: SubmitInterviewDto,
   ) {
-    return this.sessionsService.submitInterview(id, req.user.id, dto);
+    const result = await this.sessionsService.submitInterview(
+      id,
+      req.user.id,
+      dto,
+    );
+    return result.interview;
   }
 
   @Get(':id/status')
-  getSessionStatus(@Request() req, @Param('id') id: string) {
+  getSessionStatus(@Request() req, @Param('id', ParseUUIDPipe) id: string) {
     return this.sessionsService.getSessionStatus(id, req.user.id);
   }
 
   @Patch(':id/status')
   updateSessionStatus(
     @Request() req,
-    @Param('id') id: string,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() dto: UpdateStatusDto,
   ) {
     return this.sessionsService.updateSessionStatus(id, req.user.id, dto.status);
