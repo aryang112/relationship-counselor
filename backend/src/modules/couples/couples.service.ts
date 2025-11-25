@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   ConflictException,
   Injectable,
   NotFoundException,
@@ -38,28 +39,28 @@ export class CouplesService {
 
   async createInvite(userId: string) {
     const existingCouple = await this.findCoupleByUser(userId);
-    const inviteToken = randomUUID();
 
     if (existingCouple) {
-      // Allow regenerating invite if partner hasn't joined yet
       if (existingCouple.userAId === userId && !existingCouple.userBId) {
-        return this.prisma.couple.update({
-          where: { id: existingCouple.id },
-          data: { inviteToken },
-          include: coupleInclude,
-        });
+        // TODO: NOTIFICATION - Send reminder to Partner B that Partner A is waiting
+        // When reminders are implemented, trigger a gentle nudge here via push/email.
+        return { couple: existingCouple, wasReminder: true };
       }
 
       throw new ConflictException('User is already part of a couple');
     }
 
-    return this.prisma.couple.create({
+    const inviteToken = randomUUID();
+
+    const couple = await this.prisma.couple.create({
       data: {
         userAId: userId,
         inviteToken,
       },
       include: coupleInclude,
     });
+
+    return { couple, wasReminder: false };
   }
 
   async acceptInvite(userId: string, inviteToken: string) {
@@ -73,7 +74,7 @@ export class CouplesService {
     }
 
     if (invite.userAId === userId) {
-      throw new ConflictException('You cannot accept your own invite');
+      throw new BadRequestException('You cannot accept your own invite');
     }
 
     if (invite.userBId && invite.userBId !== userId) {

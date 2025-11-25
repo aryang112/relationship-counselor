@@ -59,6 +59,7 @@ model Session {
   interviews  Interview[]
 
   @@index([coupleId])
+  @@index([coupleId, status])
   @@map("sessions")
 }
 

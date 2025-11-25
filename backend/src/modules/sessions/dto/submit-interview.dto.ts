@@ -1,8 +1,8 @@
-import { IsNotEmptyObject, IsOptional, IsString } from 'class-validator';
+import { IsArray, IsNotEmpty, IsOptional, IsString } from 'class-validator';
 
 export class SubmitInterviewDto {
-  @IsNotEmptyObject()
-  responses: Record<string, any>;
+  @IsNotEmpty()
+  responses: any; // Can be array of Q&A objects or any JSON structure
 
   @IsOptional()
   @IsString()

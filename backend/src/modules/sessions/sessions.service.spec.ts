@@ -24,6 +24,7 @@ describe('SessionsService', () => {
       update: jest.Mock;
       findMany: jest.Mock;
     };
+    $transaction: jest.Mock;
   };
   let couplesService: { getCoupleForUser: jest.Mock };
 
@@ -42,6 +43,7 @@ describe('SessionsService', () => {
         update: jest.fn(),
         findMany: jest.fn(),
       },
+      $transaction: jest.fn(async (cb) => cb(prisma)),
     };
 
     couplesService = {
@@ -117,7 +119,7 @@ describe('SessionsService', () => {
 
       await expect(
         service.startSession('user-a', { topic: 't' }),
-      ).rejects.toBeInstanceOf(ConflictException);
+      ).rejects.toBeInstanceOf(ForbiddenException);
     });
 
     it('throws when active session exists', async () => {
@@ -179,37 +181,20 @@ describe('SessionsService', () => {
       expect(result.session.status).toBe('in_progress');
     });
 
-    it('updates interview when it exists and marks session unpacking_ready when both complete', async () => {
-      const inProgressSession = { ...baseSession, status: 'in_progress' };
-
-      prisma.session.findUnique.mockResolvedValueOnce(inProgressSession);
+    it('throws conflict when same user resubmits interview', async () => {
+      prisma.session.findUnique.mockResolvedValueOnce(baseSession);
       prisma.interview.findFirst.mockResolvedValueOnce({
-        id: 'interview-b',
-        userId: 'user-b',
-      });
-      prisma.interview.update.mockResolvedValueOnce({
-        id: 'interview-b',
-        userId: 'user-b',
-      });
-      prisma.interview.findMany.mockResolvedValueOnce([
-        { id: 'interview-a', userId: 'user-a' },
-        { id: 'interview-b', userId: 'user-b' },
-      ]);
-      prisma.session.update.mockResolvedValueOnce({
-        ...baseSession,
-        status: 'unpacking_ready',
-        interviews: [
-          { id: 'interview-a', userId: 'user-a' },
-          { id: 'interview-b', userId: 'user-b' },
-        ],
+        id: 'interview-a',
+        userId: 'user-a',
       });
 
-      const result = await service.submitInterview('session-id', 'user-b', {
-        responses: { q1: 'b answer' },
-      });
+      await expect(
+        service.submitInterview('session-id', 'user-a', {
+          responses: { q1: 'answer' },
+        }),
+      ).rejects.toBeInstanceOf(ConflictException);
 
-      expect(prisma.interview.update).toHaveBeenCalled();
-      expect(result.session.status).toBe('unpacking_ready');
+      expect(prisma.interview.create).not.toHaveBeenCalled();
     });
   });
 
@@ -271,15 +256,30 @@ describe('SessionsService', () => {
   });
 
   describe('getAllSessions', () => {
-    it('returns all sessions for couple', async () => {
+    it('returns all sessions for couple with sanitized interviews', async () => {
       couplesService.getCoupleForUser.mockResolvedValueOnce({
         id: 'couple-id',
         userAId: 'user-a',
         userBId: 'user-b',
       });
       prisma.session.findMany.mockResolvedValueOnce([
-        { id: 'session-1', coupleId: 'couple-id', status: 'resolved' },
-        { id: 'session-2', coupleId: 'couple-id', status: 'in_progress' },
+        {
+          id: 'session-1',
+          coupleId: 'couple-id',
+          status: 'resolved',
+          interviews: [
+            {
+              id: 'interview-1',
+              userId: 'user-a',
+              sessionId: 'session-1',
+              responses: [{ question: 'Q1', answer: 'A1' }],
+              notes: 'private',
+              completedAt: null,
+              createdAt: new Date(),
+              updatedAt: new Date(),
+            },
+          ],
+        },
       ]);
 
       const sessions = await service.getAllSessions('user-a');
@@ -289,7 +289,16 @@ describe('SessionsService', () => {
         include: { interviews: true },
         orderBy: { createdAt: 'desc' },
       });
-      expect(sessions).toHaveLength(2);
+      expect(sessions).toHaveLength(1);
+      expect(sessions[0].interviews[0]).toEqual(
+        expect.objectContaining({
+          id: 'interview-1',
+          userId: 'user-a',
+          sessionId: 'session-1',
+        }),
+      );
+      expect(sessions[0].interviews[0]).not.toHaveProperty('responses');
+      expect(sessions[0].interviews[0]).not.toHaveProperty('notes');
     });
   });
 

@@ -64,32 +64,27 @@ describe('CouplesService', () => {
         }),
       );
       expect(result).toEqual({
-        id: 'couple-id',
-        inviteToken: '11111111-1111-1111-1111-111111111111',
+        couple: {
+          id: 'couple-id',
+          inviteToken: '11111111-1111-1111-1111-111111111111',
+        },
+        wasReminder: false,
       });
     });
 
-    it('regenerates invite when partner not joined yet', async () => {
-      prisma.couple.findFirst.mockResolvedValueOnce({
+    it('returns existing invite when partner has not joined yet', async () => {
+      const existingCouple = {
         id: 'couple-id',
         userAId: 'user-a',
         userBId: null,
-      });
-      prisma.couple.update.mockResolvedValueOnce({
-        id: 'couple-id',
-        inviteToken: '11111111-1111-1111-1111-111111111111',
-      });
+        inviteToken: 'existing-token',
+      };
+      prisma.couple.findFirst.mockResolvedValueOnce(existingCouple);
 
-      await service.createInvite('user-a');
+      const result = await service.createInvite('user-a');
 
-      expect(prisma.couple.update).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { id: 'couple-id' },
-          data: {
-            inviteToken: '11111111-1111-1111-1111-111111111111',
-          },
-        }),
-      );
+      expect(prisma.couple.create).not.toHaveBeenCalled();
+      expect(result).toEqual({ couple: existingCouple, wasReminder: true });
     });
 
     it('throws when user already in couple', async () => {

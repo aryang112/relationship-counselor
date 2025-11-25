@@ -3,14 +3,18 @@ import {
   Body,
   Controller,
   Get,
+  HttpCode,
+  HttpStatus,
   Post,
   Request,
+  Res,
   UseGuards,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { CouplesService } from './couples.service';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { SignAgreementDto } from './dto/sign-agreement.dto';
+import { Response } from 'express';
 
 @UseGuards(JwtAuthGuard)
 @Controller('couples')
@@ -18,8 +22,19 @@ export class CouplesController {
   constructor(private couplesService: CouplesService) {}
 
   @Post('invite')
-  async createInvite(@Request() req) {
-    const couple = await this.couplesService.createInvite(req.user.id);
+  async createInvite(@Request() req, @Res({ passthrough: true }) res: Response) {
+    const { couple, wasReminder } = await this.couplesService.createInvite(req.user.id);
+
+    if (wasReminder) {
+      res.status(HttpStatus.OK);
+      return {
+        message: 'Reminder sent to your partner',
+        couple,
+        inviteToken: couple.inviteToken,
+      };
+    }
+
+    res.status(HttpStatus.CREATED);
     return {
       message: 'Invite generated',
       couple,
@@ -28,33 +43,23 @@ export class CouplesController {
   }
 
   @Post('accept')
+  @HttpCode(HttpStatus.OK)
   async acceptInvite(@Request() req, @Body() dto: AcceptInviteDto) {
-    const couple = await this.couplesService.acceptInvite(
-      req.user.id,
-      dto.inviteToken,
-    );
-    return {
-      message: 'Invite accepted',
-      couple,
-    };
+    return this.couplesService.acceptInvite(req.user.id, dto.inviteToken);
   }
 
   @Get('me')
   async getMyCouple(@Request() req) {
-    const couple = await this.couplesService.getCoupleForUser(req.user.id);
-    return { couple };
+    return this.couplesService.getCoupleForUser(req.user.id);
   }
 
   @Post('agreement')
+  @HttpCode(HttpStatus.OK)
   async signAgreement(@Request() req, @Body() dto: SignAgreementDto) {
     if (!dto.confirm) {
       throw new BadRequestException('You must confirm agreement to sign');
     }
 
-    const couple = await this.couplesService.signAgreement(req.user.id);
-    return {
-      message: 'Agreement signed',
-      couple,
-    };
+    return this.couplesService.signAgreement(req.user.id);
   }
 }
