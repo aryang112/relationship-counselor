@@ -5,6 +5,7 @@ import {
   closePrismaConnections,
   createAuthenticatedCouple,
   createSession,
+  notificationsServiceMock,
 } from './test-helpers';
 import { resetTestDatabase } from './setup';
 
@@ -39,6 +40,7 @@ describe('Session Creation and Management (E2E)', () => {
 
   beforeEach(async () => {
     await resetTestDatabase();
+    notificationsServiceMock.sends.length = 0;
   });
 
   describe('Session Creation', () => {
@@ -571,6 +573,62 @@ describe('Session Creation and Management (E2E)', () => {
     });
   });
 
+  describe('Notifications', () => {
+    it('should send manual reminder to partner to complete interview', async () => {
+      const { userA, userB } = await createAuthenticatedCouple(app);
+      const session = await createSession(app, userA.token);
+
+      await request(app.getHttpServer())
+        .post(`/sessions/${session.id}/remind-partner`)
+        .set('Authorization', `Bearer ${userA.token}`)
+        .expect(201);
+
+      const reminder = notificationsServiceMock.sends.find(
+        (n) => n.type === 'manual_interview_reminder' && n.userId === userB.user.id,
+      );
+      expect(reminder).toBeDefined();
+      expect(reminder.data.sessionId).toBe(session.id);
+    });
+
+    it('should return 403 if both partners already completed interviews', async () => {
+      const { userA, userB } = await createAuthenticatedCouple(app);
+      const session = await createSession(app, userA.token);
+
+      // Both partners complete interviews
+      await request(app.getHttpServer())
+        .post(`/sessions/${session.id}/interview`)
+        .set('Authorization', `Bearer ${userA.token}`)
+        .send({ responses: [{ q: 'q1', a: 'a1' }] })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/sessions/${session.id}/interview`)
+        .set('Authorization', `Bearer ${userB.token}`)
+        .send({ responses: [{ q: 'q1', a: 'a1' }] })
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/sessions/${session.id}/remind-partner`)
+        .set('Authorization', `Bearer ${userA.token}`)
+        .expect(403);
+    });
+
+    it('should return 429 when reminders are sent too frequently', async () => {
+      const { userA, userB } = await createAuthenticatedCouple(app);
+      const session = await createSession(app, userA.token);
+
+      await request(app.getHttpServer())
+        .post(`/sessions/${session.id}/remind-partner`)
+        .set('Authorization', `Bearer ${userA.token}`)
+        .expect(201);
+
+      await request(app.getHttpServer())
+        .post(`/sessions/${session.id}/remind-partner`)
+        .set('Authorization', `Bearer ${userA.token}`)
+        .expect(429);
+    });
+  });
+
   describe('Complete Session Flow', () => {
     it('should complete full session lifecycle from creation to unpacking_ready', async () => {
       const { userA, userB, couple } = await createAuthenticatedCouple(app);
@@ -587,7 +645,10 @@ describe('Session Creation and Management (E2E)', () => {
 
       expect(session.body.status).toBe('initiated');
       expect(session.body.initiatedBy).toBe(userA.user.id);
-      // TODO: Verify notification sent to Partner B
+      const initNotification = notificationsServiceMock.sends.find(
+        (n) => n.type === 'session_initiated' && n.userId === userB.user.id,
+      );
+      expect(initNotification).toBeDefined();
 
       console.log('Step 2: Partner A completes interview');
       await request(app.getHttpServer())
@@ -642,8 +703,12 @@ describe('Session Creation and Management (E2E)', () => {
       expect(statusCheck.body.partnerStatus.userAComplete).toBe(true);
       expect(statusCheck.body.partnerStatus.userBComplete).toBe(true);
 
-      // TODO: Verify unpacking job queued
-      // TODO: Verify notifications sent to both partners
+      const unpackingReadyNotifications = notificationsServiceMock.sends.filter(
+        (n) => n.type === 'unpacking_ready' && n.data?.sessionId === session.body.id,
+      );
+      expect(unpackingReadyNotifications.map((n) => n.userId).sort()).toEqual(
+        [userA.user.id, userB.user.id].sort(),
+      );
 
       console.log('✓ Complete session flow verified: Initiation → Both Interviews → Unpacking Ready');
     });

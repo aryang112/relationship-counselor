@@ -36,6 +36,7 @@ export async function cleanupTestDatabase() {
   const cleanupPrisma = new PrismaClient();
   try {
     // Delete all data in reverse order of dependencies
+    await cleanupPrisma.unpacking.deleteMany();
     await cleanupPrisma.interview.deleteMany();
     await cleanupPrisma.session.deleteMany();
     await cleanupPrisma.couple.deleteMany();

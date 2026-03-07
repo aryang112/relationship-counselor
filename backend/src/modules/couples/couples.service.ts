@@ -111,16 +111,31 @@ export class CouplesService {
       throw new ConflictException('Your partner must join before signing');
     }
 
-    if (couple.agreementSignedAt) {
+    // Determine which partner is signing
+    const isUserA = couple.userAId === userId;
+    const isUserB = couple.userBId === userId;
+
+    // Check if this user already signed
+    if (isUserA && couple.userASignedAt) {
+      return couple;
+    }
+    if (isUserB && couple.userBSignedAt) {
       return couple;
     }
 
+    // Update the appropriate signature field
+    const updateData = isUserA
+      ? { userASignedAt: new Date() }
+      : { userBSignedAt: new Date() };
+
     return this.prisma.couple.update({
       where: { id: couple.id },
-      data: {
-        agreementSignedAt: new Date(),
-      },
+      data: updateData,
       include: coupleInclude,
     });
+  }
+
+  bothPartnersSignedAgreement(couple: any): boolean {
+    return !!(couple.userASignedAt && couple.userBSignedAt);
   }
 }

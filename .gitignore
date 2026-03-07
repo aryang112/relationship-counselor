@@ -56,3 +56,6 @@ logs/
 # Temporary files
 *.tmp
 .cache/
+
+# Claude Code (user-specific agent memory)
+.claude/

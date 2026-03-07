@@ -25,15 +25,22 @@ Background job processors for AI-powered relationship mediation features.
 
 Add to `backend/.env` (workers will load this file):
 
-\`\`\`env
-# Redis Configuration
-REDIS_HOST=localhost
-REDIS_PORT=6379
-REDIS_PASSWORD=  # Optional
+```env
+# Database (Prisma for workers)
+DATABASE_URL=postgresql://user:password@localhost:5432/relation_counselor
+
+# Redis Configuration (prefer URL; host/port as fallback)
+REDIS_URL=redis://localhost:6379
+# REDIS_HOST=localhost
+# REDIS_PORT=6379
+# REDIS_PASSWORD=  # Optional
 
 # OpenAI Configuration
 OPENAI_API_KEY=sk-...  # Required
-\`\`\`
+# Optional: override models
+# OPENAI_MODEL=gpt-4o
+# OPENAI_MODEL_FAST=gpt-4o-mini
+```
 
 ### Installation
 

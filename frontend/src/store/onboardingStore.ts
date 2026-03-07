@@ -1,0 +1,71 @@
+/**
+ * Onboarding Store — Persists onboarding form data across screens.
+ *
+ * Holds all user-entered data during the onboarding flow (name, communication
+ * style, relationship story, partner details, love bank, conflict preferences).
+ * Data is submitted to the backend when onboarding completes.
+ */
+
+import { create } from 'zustand';
+
+export interface OnboardingData {
+  // Screen 3: Your Name
+  firstName: string;
+
+  // Screen 4a: Communication Style
+  communicationStyles: string[];
+
+  // Screen 4b: Conflict Feelings
+  conflictFeelings: string[];
+
+  // Screen 5: Relationship Story
+  datingStartDate: string; // ISO date string
+  isLongDistance: boolean | null;
+  howMet: string;
+  firstDateLocation: string;
+
+  // Screen 6: Partner Details
+  partnerName: string;
+  partnerCommunicationStyles: string[];
+  partnerConflictFeelings: string[];
+
+  // Screen 7: Love Bank
+  loveReasons: [string, string, string];
+  favoriteMemory: string;
+  relationshipStrengths: string[];
+
+  // Screen 8: Conflict Preferences
+  resolutionSpeed: string;
+  attachmentStyle: string;
+  pastConflictPatterns: string[];
+}
+
+interface OnboardingState extends OnboardingData {
+  setField: <K extends keyof OnboardingData>(key: K, value: OnboardingData[K]) => void;
+  reset: () => void;
+}
+
+const initialData: OnboardingData = {
+  firstName: '',
+  communicationStyles: [],
+  conflictFeelings: [],
+  datingStartDate: '',
+  isLongDistance: null,
+  howMet: '',
+  firstDateLocation: '',
+  partnerName: '',
+  partnerCommunicationStyles: [],
+  partnerConflictFeelings: [],
+  loveReasons: ['', '', ''],
+  favoriteMemory: '',
+  relationshipStrengths: [],
+  resolutionSpeed: '',
+  attachmentStyle: '',
+  pastConflictPatterns: [],
+};
+
+export const useOnboardingStore = create<OnboardingState>((set) => ({
+  ...initialData,
+  setField: (key, value) => set({ [key]: value }),
+  reset: () => set(initialData),
+}));

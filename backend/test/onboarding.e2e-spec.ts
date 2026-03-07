@@ -399,7 +399,8 @@ describe('Onboarding & Partner Connection Flow (E2E)', () => {
         .expect(200);
 
       expect(response.body.id).toBeDefined();
-      expect(response.body.agreementSignedAt).not.toBeNull();
+      expect(response.body.userASignedAt).not.toBeNull();
+      expect(response.body.userBSignedAt).toBeNull();
     });
 
     it('should allow Partner B to sign shared agreement', async () => {
@@ -410,7 +411,8 @@ describe('Onboarding & Partner Connection Flow (E2E)', () => {
         .expect(200);
 
       expect(response.body.id).toBeDefined();
-      expect(response.body.agreementSignedAt).not.toBeNull();
+      expect(response.body.userBSignedAt).not.toBeNull();
+      expect(response.body.userASignedAt).toBeNull();
     });
 
     it('should mark agreement as signed after both partners sign', async () => {
@@ -434,10 +436,10 @@ describe('Onboarding & Partner Connection Flow (E2E)', () => {
         .set('Authorization', `Bearer ${userAToken}`)
         .expect(200);
 
-      expect(coupleResponse.body.agreementSignedAt).not.toBeNull();
-      expect(new Date(coupleResponse.body.agreementSignedAt)).toBeInstanceOf(
-        Date,
-      );
+      expect(coupleResponse.body.userASignedAt).not.toBeNull();
+      expect(coupleResponse.body.userBSignedAt).not.toBeNull();
+      expect(new Date(coupleResponse.body.userASignedAt)).toBeInstanceOf(Date);
+      expect(new Date(coupleResponse.body.userBSignedAt)).toBeInstanceOf(Date);
     });
 
     it('should require authentication to sign agreement', async () => {
@@ -541,7 +543,8 @@ describe('Onboarding & Partner Connection Flow (E2E)', () => {
 
       expect(coupleInfoA.body.id).toBe(couple.body.id);
       expect(coupleInfoB.body.id).toBe(couple.body.id);
-      expect(coupleInfoA.body.agreementSignedAt).not.toBeNull();
+      expect(coupleInfoA.body.userASignedAt).not.toBeNull();
+      expect(coupleInfoA.body.userBSignedAt).not.toBeNull();
 
       console.log('✓ Complete onboarding flow verified: Registration → Invite → Accept → Agreement');
     });
