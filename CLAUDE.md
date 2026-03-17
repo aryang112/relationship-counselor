@@ -40,3 +40,11 @@ docker compose -f docker-compose.db.yml up -d  # Start DB
 4. Launch 4-6 background agents with FULL context in each prompt
 5. Track with TaskCreate/TaskUpdate
 6. Verify everything compiles after all agents finish
+
+### Documentation (MANDATORY — after every implementation)
+After completing work, you MUST update these files before marking done:
+1. **`AGENT_HANDBOOK.md`** — Update §12 Task Status (mark completed/add new), §5/§6 architecture sections (new screens/endpoints/models), §13 Recent Fixes (if bugs found)
+2. **Auto-memory** (`~/.claude/projects/.../memory/MEMORY.md`) — Add stable patterns, key decisions, gotchas
+3. **`AgentInstructions.md`** — Add lessons after any user correction
+
+Do this at the END of implementation (not during). Subagents are exempt — the main agent documents their work.

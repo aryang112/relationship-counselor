@@ -40,8 +40,11 @@ function resolveBaseUrl(): string {
   return 'http://localhost:3000';
 }
 
+const _baseURL = resolveBaseUrl();
+console.log('[API] baseURL resolved to:', _baseURL);
+
 export const api = axios.create({
-  baseURL: resolveBaseUrl(),
+  baseURL: _baseURL,
   timeout: 10000,
   headers: {
     'Content-Type': 'application/json',
@@ -54,6 +57,7 @@ api.interceptors.request.use(
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+    console.log('[API]', config.method?.toUpperCase(), config.url, token ? 'AUTH' : 'NO-AUTH');
     return config;
   },
   (error) => Promise.reject(error),

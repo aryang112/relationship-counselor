@@ -18,13 +18,13 @@ import React, { useCallback } from 'react';
 import { View, FlatList, StyleSheet, Text, Pressable } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ArrowLeft } from 'lucide-react-native';
+import { ChevronRight } from 'lucide-react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { EmptyState } from '../../components/feedback/EmptyState';
 import { SessionCard } from '../../components/domain/SessionCard';
 import { useSessionList } from '../../hooks/useSession';
 import { useAuthStore } from '../../store/authStore';
-import { colors, typography, fontFamilies, spacing, radius } from '../../theme';
+import { colors, typography, fontFamilies, spacing, radius, shadows } from '../../theme';
 import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
 import type { Session } from '../../types/session';
 
@@ -58,9 +58,6 @@ export function SessionListScreen() {
       <View style={styles.screen}>
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <ArrowLeft color={colors.textSecondary} size={22} />
-          </Pressable>
           <Text style={styles.headerTitle}>All Sessions</Text>
           <View style={styles.headerRight}>
             <Text style={styles.sessionCount}>
@@ -88,6 +85,30 @@ export function SessionListScreen() {
           }}
           refreshing={false}
           onRefresh={refresh}
+          ListHeaderComponent={
+            <Pressable
+              onPress={() => navigation.navigate('StartMediation')}
+              style={({ pressed }) => [
+                styles.startCtaCard,
+                pressed && { opacity: 0.95, transform: [{ scale: 0.99 }] },
+              ]}
+            >
+              <View style={styles.startCtaLeft}>
+                <View style={styles.startCtaIconWrap}>
+                  <Text style={styles.startCtaEmoji}>{'\u{1FAC2}'}</Text>
+                </View>
+                <View style={styles.startCtaTextWrap}>
+                  <Text style={styles.startCtaTitle}>Start a Mediation</Text>
+                  <Text style={styles.startCtaSub}>
+                    Something feels off? Let's work through it together.
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.startCtaArrow}>
+                <ChevronRight color={colors.orangeMid} size={22} />
+              </View>
+            </Pressable>
+          }
           ListEmptyComponent={
             <View style={styles.emptyWrap}>
               <Text style={styles.emptyEmoji}>🌱</Text>
@@ -119,11 +140,6 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     gap: 12,
   },
-  backBtn: {
-    minWidth: 44,
-    minHeight: 44,
-    justifyContent: 'center',
-  },
   headerTitle: {
     fontFamily: fontFamilies.display,
     fontSize: 24,
@@ -144,6 +160,59 @@ const styles = StyleSheet.create({
   listContent: {
     paddingHorizontal: spacing.lg,
     paddingBottom: 32,
+  },
+
+  // Start CTA — matches HomeScreen ctaCard style
+  startCtaCard: {
+    backgroundColor: colors.bgElevated,
+    borderRadius: radius.lg,
+    padding: spacing.lg,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: spacing.md,
+    ...shadows.card,
+  },
+  startCtaLeft: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 16,
+  },
+  startCtaIconWrap: {
+    width: 52,
+    height: 52,
+    borderRadius: radius.md,
+    backgroundColor: colors.orangeTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  startCtaEmoji: {
+    fontSize: 28,
+  },
+  startCtaTextWrap: {
+    flex: 1,
+  },
+  startCtaTitle: {
+    fontFamily: fontFamilies.bodyBold,
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.textPrimary,
+    marginBottom: 4,
+  },
+  startCtaSub: {
+    fontFamily: fontFamilies.body,
+    fontSize: 13,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+  startCtaArrow: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: colors.orangeTint,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 12,
   },
 
   // Empty state

@@ -15,13 +15,23 @@ model User {
   email     String      @unique
   password  String      // Will be hashed
   name      String
+  gender    String?
+  onboardingData Json?  @map("onboarding_data")
   timezone  String      @default("UTC")
   createdAt DateTime    @default(now()) @map("created_at")
   updatedAt DateTime    @updatedAt @map("updated_at")
 
-  couplesAsUserA Couple[]   @relation("UserACouples")
-  couplesAsUserB Couple[]   @relation("UserBCouples")
+  // Consent fields
+  tosVersionAgreed      String?   @map("tos_version_agreed") @db.VarChar(10)
+  privacyVersionAgreed  String?   @map("privacy_version_agreed") @db.VarChar(10)
+  consentAgreedAt       DateTime? @map("consent_agreed_at")
+  dateOfBirthConfirmed  Boolean   @default(false) @map("date_of_birth_confirmed")
+  isMinorFlagged        Boolean   @default(false) @map("is_minor_flagged")
+
+  couplesAsUserA Couple[]      @relation("UserACouples")
+  couplesAsUserB Couple[]      @relation("UserBCouples")
   interviews     Interview[]
+  consentLogs    ConsentLog[]
 
   @@map("users")
 }
@@ -31,6 +41,8 @@ model Couple {
   userAId           String   @map("user_a_id")
   userBId           String?  @map("user_b_id")
   inviteToken       String?  @unique @map("invite_token")
+  datingStartDate   String?  @map("dating_start_date")
+  onboardingData    Json?    @map("onboarding_data")
   userASignedAt     DateTime? @map("user_a_signed_at")
   userBSignedAt     DateTime? @map("user_b_signed_at")
   createdAt         DateTime @default(now()) @map("created_at")
@@ -108,4 +120,20 @@ model Unpacking {
 
   @@index([sessionId])
   @@map("unpackings")
+}
+
+// Consent audit log — records every time a user agrees to ToS/PP
+model ConsentLog {
+  id              String   @id @default(uuid())
+  userId          String   @map("user_id")
+  tosVersion      String   @map("tos_version") @db.VarChar(10)
+  privacyVersion  String   @map("privacy_version") @db.VarChar(10)
+  agreedAt        DateTime @default(now()) @map("agreed_at")
+  appVersion      String?  @map("app_version") @db.VarChar(20)
+  platform        String?  @db.VarChar(10) // 'ios' or 'android'
+
+  user            User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("consent_log")
 }

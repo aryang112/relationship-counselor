@@ -5,6 +5,9 @@ import type {
   InviteResponse,
   AcceptInviteRequest,
   SignAgreementRequest,
+  RecordConsentRequest,
+  RecordConsentResponse,
+  ConsentStatusResponse,
 } from '../types/api';
 
 export async function register(data: RegisterRequest): Promise<AuthResponse> {
@@ -43,5 +46,25 @@ export async function getMyCouple(): Promise<Couple> {
 
 export async function signAgreement(data: SignAgreementRequest): Promise<Couple> {
   const res = await api.post<Couple>('/couples/agreement', data);
+  return res.data;
+}
+
+export async function updateProfile(data: { name?: string; gender?: string }): Promise<{ id: string; email: string; name: string; gender?: string }> {
+  const res = await api.patch('/auth/profile', data);
+  return res.data;
+}
+
+export async function submitCoupleOnboarding(data: { datingStartDate?: string; data?: Record<string, any> }): Promise<Couple> {
+  const res = await api.post<Couple>('/couples/onboarding', data);
+  return res.data;
+}
+
+export async function recordConsent(data: RecordConsentRequest): Promise<RecordConsentResponse> {
+  const res = await api.post<RecordConsentResponse>('/auth/consent', data);
+  return res.data;
+}
+
+export async function getConsentStatus(): Promise<ConsentStatusResponse> {
+  const res = await api.get<ConsentStatusResponse>('/auth/consent-status');
   return res.data;
 }

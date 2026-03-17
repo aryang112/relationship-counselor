@@ -1,5 +1,5 @@
 import React, { useState, useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Container } from '../../components/layout/Container';
 import { KeyboardAware } from '../../components/layout/KeyboardAware';
@@ -46,33 +46,39 @@ export function AcceptInviteScreen({
 
   return (
     <SafeArea>
-      <KeyboardAware style={styles.content}>
-        <Container>
-          <Text style={[styles.title, { color: colors.textPrimary }]}>
-            Join your partner
-          </Text>
-          <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
-            Paste the invite code your partner shared with you
-          </Text>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={{ flex: 1 }}>
+          <KeyboardAware style={styles.content}>
+            <Container>
+              <Text style={[styles.title, { color: colors.textPrimary }]}>
+                Join your partner
+              </Text>
+              <Text style={[styles.subtitle, { color: colors.textSecondary }]}>
+                Paste the invite code your partner shared with you
+              </Text>
 
-          <Input
-            label="Invite code"
-            placeholder="Paste invite code here"
-            value={token}
-            onChangeText={setToken}
-            autoCapitalize="none"
-          />
+              <Input
+                label="Invite code"
+                placeholder="Paste invite code here"
+                value={token}
+                onChangeText={setToken}
+                autoCapitalize="none"
+                returnKeyType="done"
+                onSubmitEditing={Keyboard.dismiss}
+              />
 
-          <Button
-            title="Accept invite"
-            onPress={handleAccept}
-            loading={loading}
-            disabled={!token.trim()}
-            style={styles.acceptBtn}
-          />
-          <Button title="Go back" onPress={onBack} variant="ghost" />
-        </Container>
-      </KeyboardAware>
+              <Button
+                title="Accept invite"
+                onPress={handleAccept}
+                loading={loading}
+                disabled={!token.trim()}
+                style={styles.acceptBtn}
+              />
+              <Button title="Go back" onPress={onBack} variant="ghost" />
+            </Container>
+          </KeyboardAware>
+        </View>
+      </TouchableWithoutFeedback>
     </SafeArea>
   );
 }

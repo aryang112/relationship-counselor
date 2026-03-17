@@ -62,7 +62,7 @@ export function RegisterScreen({ onNavigateLogin, onSuccess }: RegisterScreenPro
     formState: { errors },
   } = useForm<RegisterFormData>({
     resolver: zodResolver(registerSchema),
-    defaultValues: { name: '', email: '', password: '' },
+    defaultValues: { email: '', password: '' },
     mode: 'onTouched',
   });
 
@@ -74,7 +74,11 @@ export function RegisterScreen({ onNavigateLogin, onSuccess }: RegisterScreenPro
       Keyboard.dismiss();
       setLoading(true);
       try {
-        const res = await register(data);
+        const payload = {
+          ...data,
+          name: data.email.split('@')[0],
+        };
+        const res = await register(payload);
         setUser(res.user);
         successTap();
         onSuccess();
@@ -109,23 +113,6 @@ export function RegisterScreen({ onNavigateLogin, onSuccess }: RegisterScreenPro
               Start building a stronger relationship together
             </Text>
           </View>
-
-          <Controller
-            control={control}
-            name="name"
-            render={({ field: { onChange, onBlur, value } }) => (
-              <Input
-                label="Name"
-                placeholder="Your first name"
-                autoCapitalize="words"
-                autoComplete="given-name"
-                value={value}
-                onChangeText={onChange}
-                onBlur={onBlur}
-                error={errors.name?.message}
-              />
-            )}
-          />
 
           <Controller
             control={control}

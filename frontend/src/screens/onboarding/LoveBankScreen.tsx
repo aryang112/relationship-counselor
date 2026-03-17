@@ -10,12 +10,14 @@
  */
 
 import React, { useState } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, ScrollView, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
+
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Container } from '../../components/layout/Container';
 import { Button } from '../../components/ui/Button';
+import { KeyboardDoneBar, KEYBOARD_DONE_ID } from '../../components/ui/KeyboardDoneBar';
 import { colors, fontFamilies, typography, spacing, radius } from '../../theme';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { selectionTap } from '../../utils/haptics';
@@ -60,7 +62,7 @@ export function LoveBankScreen({ onNext, onBack, progress }: LoveBankScreenProps
   const hasAtLeastOneReason = store.loveReasons.some((r) => r.trim().length > 0);
 
   return (
-    <SafeArea style={{ backgroundColor: colors.bgPrimary }} edges={['top']}>
+    <SafeArea style={{ backgroundColor: colors.bgPrimary }}>
       {/* Progress bar */}
       <View style={styles.progressTrack}>
         <View
@@ -68,104 +70,115 @@ export function LoveBankScreen({ onNext, onBack, progress }: LoveBankScreenProps
         />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {/* Warm gradient header */}
-        <LinearGradient
-          colors={colors.gradientSoft}
-          style={styles.header}
-        >
-          <Container>
-            <Animated.View entering={FadeInDown.duration(600).delay(200)}>
-              <Text style={styles.headerTitle}>
-                Before we talk about conflict...
-              </Text>
-              <Text style={styles.headerSubtitle}>
-                Let's remember why you're here.
-              </Text>
-            </Animated.View>
-          </Container>
-        </LinearGradient>
+      <KeyboardDoneBar />
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
+            {/* Warm gradient header */}
+            <LinearGradient
+              colors={colors.gradientSoft}
+              style={styles.header}
+            >
+              <Container>
+                <Animated.View entering={FadeInDown.duration(600).delay(200)}>
+                  <Text style={styles.headerTitle}>
+                    Before we talk about conflict...
+                  </Text>
+                  <Text style={styles.headerSubtitle}>
+                    Let's remember why you're here.
+                  </Text>
+                </Animated.View>
+              </Container>
+            </LinearGradient>
 
-        <Container>
-          {/* Love reasons */}
-          <Animated.View entering={FadeInDown.duration(500).delay(400)}>
-            <Text style={styles.sectionTitle}>
-              One thing I love about {partnerName} is...
-            </Text>
+            <Container>
+              {/* Love reasons */}
+              <Animated.View entering={FadeInDown.duration(500).delay(400)}>
+                <Text style={styles.sectionTitle}>
+                  One thing I love about {partnerName} is...
+                </Text>
 
-            {[0, 1, 2].map((index) => (
-              <TextInput
-                key={index}
-                style={styles.loveInput}
-                placeholder={
-                  index === 0
-                    ? 'Their kindness, sense of humor, courage...'
-                    : index === 1
-                      ? 'Another thing I appreciate...'
-                      : 'And one more...'
-                }
-                placeholderTextColor={colors.textMuted}
-                value={store.loveReasons[index]}
-                onChangeText={(text) => updateLoveReason(index as 0 | 1 | 2, text)}
-              />
-            ))}
-          </Animated.View>
+                {[0, 1, 2].map((index) => (
+                  <TextInput
+                    key={index}
+                    style={styles.loveInput}
+                    placeholder={
+                      index === 0
+                        ? 'Their kindness, sense of humor, courage...'
+                        : index === 1
+                          ? 'Another thing I appreciate...'
+                          : 'And one more...'
+                    }
+                    placeholderTextColor={colors.textMuted}
+                    value={store.loveReasons[index]}
+                    onChangeText={(text) => updateLoveReason(index as 0 | 1 | 2, text)}
+                    returnKeyType="done"
+                    onSubmitEditing={Keyboard.dismiss}
+                    inputAccessoryViewID={KEYBOARD_DONE_ID}
+                  />
+                ))}
+              </Animated.View>
 
-          {/* Favorite memory */}
-          <Animated.View entering={FadeInDown.duration(500).delay(600)}>
-            <Text style={styles.sectionTitle}>
-              A favorite memory together
-            </Text>
-            <TextInput
-              style={[styles.loveInput, styles.memoryInput]}
-              placeholder="That trip to the coast, the night we stayed up talking..."
-              placeholderTextColor={colors.textMuted}
-              value={store.favoriteMemory}
-              onChangeText={(text) => store.setField('favoriteMemory', text)}
-              multiline
-              textAlignVertical="top"
-            />
-          </Animated.View>
+              {/* Favorite memory */}
+              <Animated.View entering={FadeInDown.duration(500).delay(600)}>
+                <Text style={styles.sectionTitle}>
+                  A favorite memory together
+                </Text>
+                <TextInput
+                  style={[styles.loveInput, styles.memoryInput]}
+                  placeholder="That trip to the coast, the night we stayed up talking..."
+                  placeholderTextColor={colors.textMuted}
+                  value={store.favoriteMemory}
+                  onChangeText={(text) => store.setField('favoriteMemory', text)}
+                  multiline
+                  textAlignVertical="top"
+                  inputAccessoryViewID={KEYBOARD_DONE_ID}
+                />
+              </Animated.View>
 
-          {/* Relationship strengths */}
-          <Animated.View entering={FadeInDown.duration(500).delay(800)}>
-            <Text style={styles.sectionTitle}>
-              Our relationship strengths
-            </Text>
-            <View style={styles.strengthGrid}>
-              {STRENGTH_OPTIONS.map((option) => {
-                const isSelected = store.relationshipStrengths.includes(option.id);
-                return (
-                  <Pressable
-                    key={option.id}
-                    style={[
-                      styles.strengthPill,
-                      isSelected && styles.strengthPillSelected,
-                    ]}
-                    onPress={() => toggleStrength(option.id)}
-                  >
-                    <Text
-                      style={[
-                        styles.strengthText,
-                        isSelected && styles.strengthTextSelected,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
-          </Animated.View>
-        </Container>
-      </ScrollView>
+              {/* Relationship strengths */}
+              <Animated.View entering={FadeInDown.duration(500).delay(800)}>
+                <Text style={styles.sectionTitle}>
+                  Our relationship strengths
+                </Text>
+                <View style={styles.strengthGrid}>
+                  {STRENGTH_OPTIONS.map((option) => {
+                    const isSelected = store.relationshipStrengths.includes(option.id);
+                    return (
+                      <Pressable
+                        key={option.id}
+                        style={[
+                          styles.strengthPill,
+                          isSelected && styles.strengthPillSelected,
+                        ]}
+                        onPress={() => toggleStrength(option.id)}
+                      >
+                        <Text
+                          style={[
+                            styles.strengthText,
+                            isSelected && styles.strengthTextSelected,
+                          ]}
+                        >
+                          {option.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+            </Container>
+          </ScrollView>
+        </View>
+      </TouchableWithoutFeedback>
 
       <View style={styles.actions}>
-        <Container>
+        <View style={styles.actionsInner}>
           <Button
             title="Continue"
             onPress={onNext}
@@ -173,8 +186,8 @@ export function LoveBankScreen({ onNext, onBack, progress }: LoveBankScreenProps
             size="lg"
             style={styles.continueBtn}
           />
-          <Button title="Back" onPress={onBack} variant="ghost" />
-        </Container>
+          <Button title="Back" onPress={onBack} variant="ghost" size="sm" />
+        </View>
       </View>
     </SafeArea>
   );
@@ -189,6 +202,9 @@ const styles = StyleSheet.create({
     height: 3,
     backgroundColor: colors.orangeMid,
     borderRadius: 2,
+  },
+  scrollView: {
+    flex: 1,
   },
   scroll: {
     paddingBottom: spacing.lg,
@@ -263,12 +279,16 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.bodyBold,
   },
   actions: {
-    paddingVertical: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.bgSecondary,
     backgroundColor: colors.bgPrimary,
   },
+  actionsInner: {
+    paddingHorizontal: 20,
+  },
   continueBtn: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
 });

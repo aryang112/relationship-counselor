@@ -29,3 +29,25 @@ export interface TranscriptionResponse {
 export interface RemindPartnerResponse {
   message: string;
 }
+
+// ── Consent ────────────────────────────────────────────────────────
+
+export interface RecordConsentRequest {
+  tosVersion: string;
+  privacyVersion: string;
+  appVersion?: string;
+  platform?: 'ios' | 'android';
+}
+
+export interface ConsentStatusResponse {
+  hasConsented: boolean;
+  tosVersionAgreed: string | null;
+  privacyVersionAgreed: string | null;
+  consentAgreedAt: string | null;
+  needsReconsent: boolean;
+}
+
+export interface RecordConsentResponse {
+  message: string;
+  consentAgreedAt: string;
+}

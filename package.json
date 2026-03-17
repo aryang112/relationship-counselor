@@ -25,7 +25,6 @@
     "prettier": "^3.0.0"
   },
   "dependencies": {
-    "@react-navigation/bottom-tabs": "^7.15.5",
     "react": "19.1.0",
     "react-dom": "19.1.0"
   }

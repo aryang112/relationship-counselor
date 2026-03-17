@@ -20,6 +20,7 @@ export function KeyboardAware({ children, style }: KeyboardAwareProps) {
       keyboardVerticalOffset={Platform.OS === 'ios' ? 88 : 0}
     >
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={[styles.scroll, style]}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
@@ -32,6 +33,9 @@ export function KeyboardAware({ children, style }: KeyboardAwareProps) {
 
 const styles = StyleSheet.create({
   container: {
+    flex: 1,
+  },
+  scrollView: {
     flex: 1,
   },
   scroll: {

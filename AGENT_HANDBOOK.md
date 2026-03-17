@@ -2,7 +2,7 @@
 
 > **Read this entire file before writing any code.**
 > This is the single source of truth for any agent working on this project.
-> Last updated: March 7, 2026.
+> Last updated: March 11, 2026.
 
 ---
 
@@ -19,6 +19,7 @@
 10. [Coding Standards](#10-coding-standards)
 11. [Agent Orchestration](#11-agent-orchestration)
 12. [Task Status](#12-task-status)
+13. [Recent Fixes & Lessons Learned](#13-recent-fixes--lessons-learned-march-911-2026)
 
 ---
 
@@ -271,7 +272,7 @@ RootNavigator (conditional):
   ├── AuthNavigator (if not authenticated)
   │   └── Welcome → Login → Register → ForgotPassword
   ├── OnboardingNavigator (if authenticated but not onboarded)
-  │   └── Splash → Promise → YourName → CommunicationStyle → ConflictFeelings →
+  │   └── Splash → Promise → Consent → YourName → CommunicationStyle → ConflictFeelings →
   │       RelationshipStory → PartnerDetails → LoveBank → ConflictPreferences →
   │       InvitePartner → WaitingForPartner → Connected → Tutorial
   └── MainNavigator (if fully onboarded)
@@ -281,7 +282,7 @@ RootNavigator (conditional):
       │   ├── Reconnect → ReconnectTabScreen
       │   └── Us → UsProfileScreen
       └── Stack Screens (accessible from any tab):
-          StartMediation, SessionDetail, Interview, InterviewComplete,
+          StartMediation, PreSessionReminder, SessionDetail, Interview, InterviewComplete,
           UnpackingChoice, Unpacking, WaitingForPartner, Reconnection,
           Commitments, Settings, Profile, LoveBank, LearningsHistory
 ```
@@ -361,6 +362,12 @@ workers/src/
 | POST | `/auth/register` | Register: `{ email, password, name }` → `{ access_token, user }` |
 | POST | `/auth/login` | Login: `{ email, password }` → `{ access_token, user }` |
 
+### Auth — Consent (JWT required)
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/auth/consent` | Record consent: `{ tosVersion, privacyVersion, appVersion?, platform? }` |
+| GET | `/auth/consent-status` | Check consent: `{ hasConsented, needsReconsent, ... }` |
+
 ### Couples (JWT required)
 | Method | Path | Description |
 |--------|------|-------------|
@@ -404,13 +411,16 @@ workers/src/
 
 ### Models
 ```
-User:       id, email, password, name, timezone
+User:       id, email, password, name, timezone, tosVersionAgreed, privacyVersionAgreed,
+            consentAgreedAt, dateOfBirthConfirmed, isMinorFlagged
 Couple:     id, userAId, userBId, inviteToken, userASignedAt, userBSignedAt
 Session:    id, coupleId, status, initiatedBy, topic, context, unpacking state fields
 Interview:  id, sessionId, userId, responses (JSON), notes, completedAt (null=draft)
 Unpacking:  id, sessionId, surfaceConflict, partnerA/BExperience, sharedTruths (JSON),
             deeperInsight, patternRecognition, tone, feedbackCount, lastFeedbackReason
 ```
+
+ConsentLog: id, userId, tosVersion, privacyVersion, agreedAt, appVersion, platform
 
 ### Key Constraints
 - `Interview`: unique on `(sessionId, userId)` — one interview per user per session
@@ -487,6 +497,7 @@ When launching a subagent, always include:
 - ✅ Notifications (push + email + delayed reminders)
 - ✅ Manual reminder endpoint
 - ✅ Worker processors (unpacking, interview, crisis)
+- ✅ Legal consent system (POST /auth/consent, GET /auth/consent-status, ConsentLog audit table)
 
 ### Completed (Frontend — March 2026 Revamp)
 - ✅ Design system overhaul (warm-light theme, Cormorant Garamond)
@@ -500,6 +511,9 @@ When launching a subagent, always include:
 - ✅ Navigation (4-tab bottom bar: Home/Sessions/Reconnect/Us)
 - ✅ Auth screens (Welcome, Login, Register, ForgotPassword)
 - ✅ Settings screen
+- ✅ Legal consent screen (clickwrap, checkbox, ToS/PP modal viewer)
+- ✅ Pre-session safety reminder screen (before Interview)
+- ✅ Crisis resources modal (tappable hotlines, always accessible)
 
 ### Pending (Backend)
 - 🔴 TASK-B2: Crisis language blocking flow
@@ -520,6 +534,66 @@ When launching a subagent, always include:
 - 🔴 Production Redis setup
 - 🔴 Production credentials (OpenAI, Expo, SMTP)
 - 🔴 API documentation (Swagger)
+
+---
+
+## 13. Recent Fixes & Lessons Learned (March 9–11, 2026)
+
+### LinkingContext Crash (React Navigation 7)
+**Symptom:** `[Error: Couldn't find a LinkingContext context.]` on app launch.
+**Root cause:** Duplicate `@react-navigation/native` packages — v7.1.8 in `frontend/node_modules` and v7.1.33 in root `node_modules`. The `NavigationContainer` (v7.1.8) and `BottomTabBar` (using v7.1.33 via `useLinkBuilder`) had different `LinkingContext` objects. Provider from one was invisible to consumers from the other.
+**Fix:**
+1. Removed `@react-navigation/bottom-tabs` from root `package.json` (it's a frontend-only dep)
+2. Updated `@react-navigation/native` in `frontend/package.json` from `^7.1.8` to `^7.1.33`
+3. Verify with `npm ls @react-navigation/native` — must show ONE version, all deduped
+
+### React Navigation 7 Theme
+**Issue:** React Navigation 7 requires a `fonts` property on the theme object.
+**Fix:** `navTheme` in `RootNavigator.tsx` spreads `DefaultTheme` from `@react-navigation/native` to inherit `fonts`. Passed to `<NavigationContainer theme={navTheme}>` in `App.tsx`.
+
+### Onboarding Button Overlap
+**Symptom:** Continue and Back buttons overlapping at screen bottom on pill-select screens.
+**Root cause:** ScrollView without `style={{ flex: 1 }}` expands to content height, pushing the actions container off-screen. The `flexGrow: 1` was only on `contentContainerStyle` which sizes the inner content, not the ScrollView itself.
+**Fix pattern (applied to 6 screens):**
+```tsx
+<ScrollView style={styles.scrollView} contentContainerStyle={styles.scroll}>
+// ...
+<View style={styles.actions}>
+  <Button title="Continue" size="lg" style={styles.continueBtn} />
+  <Button title="Back" variant="ghost" size="sm" />
+</View>
+
+// styles:
+scrollView: { flex: 1 },
+scroll: { paddingTop: spacing['2xl'], paddingBottom: spacing.md },  // NO flexGrow
+actions: { paddingTop: spacing.lg, paddingBottom: spacing.md, ... },
+continueBtn: { marginBottom: spacing.lg },  // 24px gap between buttons
+```
+**Affected files:** CommunicationStyleScreen, ConflictFeelingsScreen, ConflictPreferencesScreen, LoveBankScreen, RelationshipStoryScreen, PartnerDetailsScreen.
+
+### Registration Flow Simplification
+**Change:** Removed name field from RegisterScreen. Registration now collects only email + password. User's name is collected in YourNameScreen during onboarding (no redundancy). Email prefix is sent as placeholder name to satisfy backend `RegisterDto.name` requirement.
+**Files changed:** `RegisterScreen.tsx`, `validation.ts` (removed name from registerSchema), `types/user.ts` (name optional on RegisterRequest).
+
+### API Base URL / Network Issues
+- `frontend/.env` has `EXPO_PUBLIC_API_BASE_URL=http://<local-ip>:3000`
+- This IP changes when switching networks — update with `ipconfig getifaddr en0`
+- Phone must be on same WiFi as dev machine (5G/cellular can't reach local IPs)
+- Value is baked at bundle time — restart Expo with `--clear` after changing
+
+### Prisma Client Generation
+- After fresh `npm install`, must run `cd backend && npx prisma generate` before `npm run start:dev`
+- Without this, backend crashes with: `@prisma/client did not initialize yet`
+
+### Database Testing Helpers
+Delete a user for re-testing onboarding:
+```bash
+docker exec relation_counselor_db psql -U postgres -d relationship_app -c "
+DELETE FROM couples WHERE user_a_id IN (SELECT id FROM users WHERE email='EMAIL');
+DELETE FROM users WHERE email='EMAIL';
+"
+```
+Note: table names are lowercase (`users`, `couples`, `sessions`, `interviews`, `unpackings`), column names are snake_case (`user_a_id`, `created_at`).
 
 ---
 

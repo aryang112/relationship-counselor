@@ -35,14 +35,16 @@ export function useAuth() {
         }
         setAuthenticated(true);
 
-        const obDone = await SecureStore.getItemAsync('onboarding_done');
-        if (obDone === 'true' && mounted) {
-          setOnboardingDone(true);
-        }
-
         const storedUser = await getStoredUser();
         if (storedUser && mounted) {
           setUser(storedUser);
+        }
+
+        // Check per-user onboarding key
+        const obKey = storedUser?.id ? `onboarding_done_${storedUser.id}` : 'onboarding_done';
+        const obDone = await SecureStore.getItemAsync(obKey);
+        if (obDone === 'true' && mounted) {
+          setOnboardingDone(true);
         }
 
         try {

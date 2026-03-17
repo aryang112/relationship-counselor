@@ -63,6 +63,7 @@ export function InvitePartnerScreen({
       }
       setWaiting(true);
     } catch (err: any) {
+      console.log('[INVITE ERROR]', err?.response?.status, err?.response?.data, err?.message);
       const msg = err?.response?.data?.message || 'Could not generate invite';
       addToast(Array.isArray(msg) ? msg[0] : msg, 'error');
     } finally {
@@ -75,7 +76,7 @@ export function InvitePartnerScreen({
     const inviteLink = `relationcounselor://invite/${inviteToken}`;
     try {
       await Share.share({
-        message: `Join me on Relation Counselor so we can strengthen our relationship together. Use this invite code: ${inviteToken}\n\nOr tap: ${inviteLink}`,
+        message: `Hey babe, I care about us so I signed up for Relate \u2014 an app that helps couples understand each other better.\n\nI\u2019d love for you to join me:\n${inviteLink}\n\nInvite code: ${inviteToken}`,
       });
       successTap();
     } catch {

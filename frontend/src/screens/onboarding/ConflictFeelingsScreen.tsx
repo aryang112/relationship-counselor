@@ -57,6 +57,7 @@ export function ConflictFeelingsScreen({
       </View>
 
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
@@ -104,7 +105,7 @@ export function ConflictFeelingsScreen({
       </ScrollView>
 
       <View style={styles.actions}>
-        <Container>
+        <View style={styles.actionsInner}>
           <Button
             title="Continue"
             onPress={onNext}
@@ -112,8 +113,8 @@ export function ConflictFeelingsScreen({
             size="lg"
             style={styles.continueBtn}
           />
-          <Button title="Back" onPress={onBack} variant="ghost" />
-        </Container>
+          <Button title="Back" onPress={onBack} variant="ghost" size="sm" />
+        </View>
       </View>
     </SafeArea>
   );
@@ -129,10 +130,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.orangeMid,
     borderRadius: 2,
   },
+  scrollView: {
+    flex: 1,
+  },
   scroll: {
     paddingTop: spacing['2xl'],
     paddingBottom: spacing.md,
-    flexGrow: 1,
   },
   title: {
     fontFamily: fontFamilies.display,
@@ -172,11 +175,16 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.bodyBold,
   },
   actions: {
-    paddingVertical: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.bgSecondary,
+    backgroundColor: colors.bgPrimary,
+  },
+  actionsInner: {
+    paddingHorizontal: 20,
   },
   continueBtn: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
 });

@@ -22,6 +22,7 @@ import { AuthNavigator } from './AuthNavigator';
 import { OnboardingNavigator } from './OnboardingNavigator';
 import { MainNavigator } from './MainNavigator';
 import { colors } from '../theme/colors';
+import { DefaultTheme } from '@react-navigation/native';
 
 export type RootNavigatorParamList = {
   Auth: undefined;
@@ -33,11 +34,13 @@ const Stack = createNativeStackNavigator<RootNavigatorParamList>();
 
 /**
  * React Navigation theme for the warm-light design system.
- * Applied via NavigationContainer (see App.tsx or navigation index).
+ * Applied via NavigationContainer (see App.tsx).
  */
 export const navTheme = {
+  ...DefaultTheme,
   dark: false,
   colors: {
+    ...DefaultTheme.colors,
     primary: colors.orangeMid,
     background: colors.bgPrimary,
     card: colors.bgElevated,
@@ -48,7 +51,7 @@ export const navTheme = {
 };
 
 export function RootNavigator() {
-  const { isAuthenticated, isLoading, couple } = useAuth();
+  const { isAuthenticated, isLoading } = useAuth();
   const { expoPushToken } = useNotifications();
   const onboardingDone = useAuthStore((s) => s.onboardingDone);
 
@@ -66,7 +69,7 @@ export function RootNavigator() {
     return <LoadingScreen message="Loading..." />;
   }
 
-  const needsOnboarding = isAuthenticated && !onboardingDone && (!couple || !couple.userBId);
+  const needsOnboarding = isAuthenticated && !onboardingDone;
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>

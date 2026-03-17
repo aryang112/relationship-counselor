@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { JwtService } from '@nestjs/jwt';
@@ -9,6 +10,8 @@ import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../prisma.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
+import { UpdateProfileDto } from './dto/update-profile.dto';
+import { RecordConsentDto } from './dto/record-consent.dto';
 
 @Injectable()
 export class AuthService {
@@ -95,6 +98,84 @@ export class AuthService {
         email: user.email,
         name: user.name,
       },
+    };
+  }
+
+  async updateProfile(userId: string, dto: UpdateProfileDto) {
+    const data: Record<string, string> = {};
+    if (dto.name !== undefined) data.name = dto.name;
+    if (dto.gender !== undefined) data.gender = dto.gender;
+    if (dto.timezone !== undefined) data.timezone = dto.timezone;
+
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data,
+    });
+
+    return { id: user.id, email: user.email, name: user.name, gender: user.gender };
+  }
+
+  async recordConsent(userId: string, dto: RecordConsentDto) {
+    const result = await this.prisma.$transaction(async (tx) => {
+      const user = await tx.user.update({
+        where: { id: userId },
+        data: {
+          tosVersionAgreed: dto.tosVersion,
+          privacyVersionAgreed: dto.privacyVersion,
+          consentAgreedAt: new Date(),
+          dateOfBirthConfirmed: true,
+        },
+      });
+
+      await tx.consentLog.create({
+        data: {
+          userId,
+          tosVersion: dto.tosVersion,
+          privacyVersion: dto.privacyVersion,
+          appVersion: dto.appVersion,
+          platform: dto.platform,
+        },
+      });
+
+      return user;
+    });
+
+    return {
+      message: 'Consent recorded successfully',
+      consentAgreedAt: result.consentAgreedAt?.toISOString(),
+    };
+  }
+
+  async getConsentStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        tosVersionAgreed: true,
+        privacyVersionAgreed: true,
+        consentAgreedAt: true,
+      },
+    });
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    // Current versions — keep in sync with /legal/versions.json
+    const CURRENT_TOS = '1.0.0';
+    const CURRENT_PRIVACY = '1.0.0';
+
+    const hasConsented = !!(user.tosVersionAgreed && user.privacyVersionAgreed && user.consentAgreedAt);
+    const needsReconsent = hasConsented && (
+      user.tosVersionAgreed !== CURRENT_TOS ||
+      user.privacyVersionAgreed !== CURRENT_PRIVACY
+    );
+
+    return {
+      hasConsented,
+      tosVersionAgreed: user.tosVersionAgreed,
+      privacyVersionAgreed: user.privacyVersionAgreed,
+      consentAgreedAt: user.consentAgreedAt?.toISOString() ?? null,
+      needsReconsent,
     };
   }
 

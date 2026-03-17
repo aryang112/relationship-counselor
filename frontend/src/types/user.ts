@@ -2,7 +2,11 @@ export interface User {
   id: string;
   email: string;
   name: string;
+  gender?: string;
   timezone?: string;
+  tosVersionAgreed?: string | null;
+  privacyVersionAgreed?: string | null;
+  consentAgreedAt?: string | null;
   createdAt?: string;
   updatedAt?: string;
 }
@@ -21,7 +25,7 @@ export interface AuthResponse {
 export interface RegisterRequest {
   email: string;
   password: string;
-  name: string;
+  name?: string;
   timezone?: string;
 }
 

@@ -50,6 +50,7 @@ interface ButtonProps {
   style?: ViewStyle;
   textStyle?: TextStyle;
   accessibilityLabel?: string;
+  testID?: string;
 }
 
 export function Button({
@@ -63,6 +64,7 @@ export function Button({
   style,
   textStyle,
   accessibilityLabel,
+  testID,
 }: ButtonProps) {
   const scale = useSharedValue(1);
 
@@ -140,6 +142,7 @@ export function Button({
 
   return (
     <AnimatedPressable
+      testID={testID}
       style={[animStyle, style]}
       onPress={handlePress}
       onPressIn={handlePressIn}

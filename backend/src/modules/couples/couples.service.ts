@@ -135,6 +135,26 @@ export class CouplesService {
     });
   }
 
+  async submitOnboarding(userId: string, datingStartDate?: string, data?: Record<string, any>) {
+    const couple = await this.getCoupleForUser(userId);
+
+    const updateData: Record<string, any> = {};
+    if (datingStartDate) updateData.datingStartDate = datingStartDate;
+
+    // Merge new onboarding data with existing (each partner adds their own)
+    const existing = (couple.onboardingData as Record<string, any>) || {};
+    const isUserA = couple.userAId === userId;
+    const key = isUserA ? 'userA' : 'userB';
+    existing[key] = data || {};
+    updateData.onboardingData = existing;
+
+    return this.prisma.couple.update({
+      where: { id: couple.id },
+      data: updateData,
+      include: coupleInclude,
+    });
+  }
+
   bothPartnersSignedAgreement(couple: any): boolean {
     return !!(couple.userASignedAt && couple.userBSignedAt);
   }

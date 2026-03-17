@@ -28,8 +28,18 @@ import {
   DMSans_400Regular,
   DMSans_600SemiBold,
 } from '@expo-google-fonts/dm-sans';
-import { RootNavigator } from './src/navigation/RootNavigator';
+import * as Linking from 'expo-linking';
+import { RootNavigator, navTheme } from './src/navigation/RootNavigator';
 import { ToastOverlay } from './src/components/feedback/ToastOverlay';
+
+const linking: Parameters<typeof NavigationContainer>[0]['linking'] = {
+  prefixes: [Linking.createURL('/'), 'relationcounselor://'],
+  config: {
+    screens: {
+      AcceptInvite: 'invite/:token',
+    },
+  } as any,
+};
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,7 +68,7 @@ export default function App() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <NavigationContainer>
+          <NavigationContainer theme={navTheme} linking={linking}>
             <StatusBar style="dark" />
             <RootNavigator />
             <ToastOverlay />

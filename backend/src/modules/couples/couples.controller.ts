@@ -14,6 +14,7 @@ import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { CouplesService } from './couples.service';
 import { AcceptInviteDto } from './dto/accept-invite.dto';
 import { SignAgreementDto } from './dto/sign-agreement.dto';
+import { SubmitOnboardingDto } from './dto/submit-onboarding.dto';
 import { Response } from 'express';
 
 @UseGuards(JwtAuthGuard)
@@ -51,6 +52,12 @@ export class CouplesController {
   @Get('me')
   async getMyCouple(@Request() req) {
     return this.couplesService.getCoupleForUser(req.user.id);
+  }
+
+  @Post('onboarding')
+  @HttpCode(HttpStatus.OK)
+  async submitOnboarding(@Request() req, @Body() dto: SubmitOnboardingDto) {
+    return this.couplesService.submitOnboarding(req.user.id, dto.datingStartDate, dto.data);
   }
 
   @Post('agreement')

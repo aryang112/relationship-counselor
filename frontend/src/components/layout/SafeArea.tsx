@@ -7,14 +7,16 @@ interface SafeAreaProps {
   children: React.ReactNode;
   style?: ViewStyle;
   edges?: ('top' | 'bottom' | 'left' | 'right')[];
+  testID?: string;
 }
 
-export function SafeArea({ children, style, edges = ['top', 'bottom'] }: SafeAreaProps) {
+export function SafeArea({ children, style, edges = ['top', 'bottom'], testID }: SafeAreaProps) {
   const insets = useSafeAreaInsets();
   const colors = useThemeColors();
 
   return (
     <View
+      testID={testID}
       style={[
         styles.container,
         { backgroundColor: colors.background },

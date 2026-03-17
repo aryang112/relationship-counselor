@@ -13,13 +13,15 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import Animated, { FadeInDown, FadeInRight, FadeOutLeft } from 'react-native-reanimated';
+
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Container } from '../../components/layout/Container';
 import { KeyboardAware } from '../../components/layout/KeyboardAware';
 import { Button } from '../../components/ui/Button';
 import { Card } from '../../components/ui/Card';
+import { KeyboardDoneBar, KEYBOARD_DONE_ID } from '../../components/ui/KeyboardDoneBar';
 import { colors, fontFamilies, typography, spacing, radius, shadows } from '../../theme';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { selectionTap } from '../../utils/haptics';
@@ -93,8 +95,9 @@ export function RelationshipStoryScreen({
               placeholderTextColor={colors.textMuted}
               value={store.datingStartDate}
               onChangeText={(text) => store.setField('datingStartDate', text)}
-              returnKeyType="next"
-              onSubmitEditing={() => canContinue() && handleNext()}
+              returnKeyType="done"
+              onSubmitEditing={() => { Keyboard.dismiss(); canContinue() && handleNext(); }}
+              inputAccessoryViewID={KEYBOARD_DONE_ID}
             />
           </Animated.View>
         );
@@ -180,6 +183,7 @@ export function RelationshipStoryScreen({
               onChangeText={(text) => store.setField('howMet', text)}
               multiline
               textAlignVertical="top"
+              inputAccessoryViewID={KEYBOARD_DONE_ID}
             />
           </Animated.View>
         );
@@ -200,6 +204,7 @@ export function RelationshipStoryScreen({
               onChangeText={(text) => store.setField('firstDateLocation', text)}
               returnKeyType="done"
               onSubmitEditing={handleNext}
+              inputAccessoryViewID={KEYBOARD_DONE_ID}
             />
           </Animated.View>
         );
@@ -221,14 +226,19 @@ export function RelationshipStoryScreen({
         />
       </View>
 
-      <KeyboardAware style={styles.keyboardContent}>
-        <Container style={styles.container}>
-          {renderStep()}
-        </Container>
-      </KeyboardAware>
+      <KeyboardDoneBar />
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={{ flex: 1 }}>
+          <KeyboardAware style={styles.keyboardContent}>
+            <Container style={styles.container}>
+              {renderStep()}
+            </Container>
+          </KeyboardAware>
+        </View>
+      </TouchableWithoutFeedback>
 
       <View style={styles.actions}>
-        <Container>
+        <View style={styles.actionsInner}>
           {/* Step indicator */}
           <View style={styles.stepDots}>
             {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
@@ -249,8 +259,8 @@ export function RelationshipStoryScreen({
             size="lg"
             style={styles.nextBtn}
           />
-          <Button title="Back" onPress={handleBack} variant="ghost" />
-        </Container>
+          <Button title="Back" onPress={handleBack} variant="ghost" size="sm" />
+        </View>
       </View>
     </SafeArea>
   );
@@ -339,9 +349,14 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   actions: {
-    paddingVertical: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.bgSecondary,
+    backgroundColor: colors.bgPrimary,
+  },
+  actionsInner: {
+    paddingHorizontal: 20,
   },
   stepDots: {
     flexDirection: 'row',
@@ -363,6 +378,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.orangeLight,
   },
   nextBtn: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
 });

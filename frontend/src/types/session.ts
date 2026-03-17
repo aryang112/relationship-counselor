@@ -13,6 +13,7 @@ export interface Couple {
   userAId: string;
   userBId: string | null;
   inviteToken: string | null;
+  datingStartDate: string | null;
   userASignedAt: string | null;
   userBSignedAt: string | null;
   createdAt: string;

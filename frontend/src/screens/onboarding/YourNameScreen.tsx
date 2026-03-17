@@ -7,14 +7,24 @@
  */
 
 import React, { useRef, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Container } from '../../components/layout/Container';
 import { KeyboardAware } from '../../components/layout/KeyboardAware';
 import { Button } from '../../components/ui/Button';
+import { KeyboardDoneBar, KEYBOARD_DONE_ID } from '../../components/ui/KeyboardDoneBar';
 import { colors, fontFamilies, typography, spacing, radius } from '../../theme';
 import { useOnboardingStore } from '../../store/onboardingStore';
+import type { Gender } from '../../store/onboardingStore';
+import { selectionTap } from '../../utils/haptics';
+
+const GENDER_OPTIONS: { id: Gender; label: string }[] = [
+  { id: 'male', label: 'Male' },
+  { id: 'female', label: 'Female' },
+  { id: 'non-binary', label: 'Non-binary' },
+  { id: 'prefer-not-to-say', label: 'Prefer not to say' },
+];
 
 interface YourNameScreenProps {
   onNext: () => void;
@@ -23,8 +33,14 @@ interface YourNameScreenProps {
 
 export function YourNameScreen({ onNext, progress }: YourNameScreenProps) {
   const firstName = useOnboardingStore((s) => s.firstName);
+  const gender = useOnboardingStore((s) => s.gender);
   const setField = useOnboardingStore((s) => s.setField);
   const inputRef = useRef<TextInput>(null);
+
+  const selectGender = (id: Gender) => {
+    selectionTap();
+    setField('gender', id);
+  };
 
   useEffect(() => {
     const timer = setTimeout(() => inputRef.current?.focus(), 500);
@@ -43,42 +59,65 @@ export function YourNameScreen({ onNext, progress }: YourNameScreenProps) {
         />
       </View>
 
-      <KeyboardAware style={styles.keyboardContent}>
-        <Container style={styles.container}>
-          <Animated.View entering={FadeInDown.duration(500).delay(200)}>
-            <Text style={styles.title}>
-              What's your first name?
-            </Text>
-            <Text style={styles.subtitle}>
-              Your partner will see this.
-            </Text>
-          </Animated.View>
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={{ flex: 1 }}>
+          <KeyboardAware style={styles.keyboardContent}>
+            <Container style={styles.container}>
+              <Animated.View entering={FadeInDown.duration(500).delay(200)}>
+                <Text style={styles.title}>
+                  What's your first name?
+                </Text>
+              </Animated.View>
 
-          <Animated.View entering={FadeInDown.duration(500).delay(400)}>
-            <TextInput
-              ref={inputRef}
-              style={styles.nameInput}
-              placeholder="Your name"
-              placeholderTextColor={colors.textMuted}
-              value={firstName}
-              onChangeText={(text) => setField('firstName', text)}
-              autoCapitalize="words"
-              autoCorrect={false}
-              returnKeyType="next"
-              onSubmitEditing={() => firstName.trim() && onNext()}
-            />
-          </Animated.View>
+              <Animated.View entering={FadeInDown.duration(500).delay(400)}>
+                <TextInput
+                  ref={inputRef}
+                  style={styles.nameInput}
+                  placeholder="Your name"
+                  placeholderTextColor={colors.textMuted}
+                  value={firstName}
+                  onChangeText={(text) => setField('firstName', text)}
+                  autoCapitalize="words"
+                  autoCorrect={false}
+                  returnKeyType="done"
+                  onSubmitEditing={Keyboard.dismiss}
+                  inputAccessoryViewID={KEYBOARD_DONE_ID}
+                />
+              </Animated.View>
 
-          <Animated.View entering={FadeInDown.duration(500).delay(600)} style={styles.actions}>
-            <Button
-              title="Next"
-              onPress={onNext}
-              disabled={!firstName.trim()}
-              size="lg"
-            />
-          </Animated.View>
-        </Container>
-      </KeyboardAware>
+              <Animated.View entering={FadeInDown.duration(500).delay(600)}>
+                <Text style={styles.genderLabel}>How do you identify?</Text>
+                <View style={styles.genderRow}>
+                  {GENDER_OPTIONS.map((opt) => {
+                    const isSelected = gender === opt.id;
+                    return (
+                      <Pressable
+                        key={opt.id}
+                        style={[styles.genderPill, isSelected && styles.genderPillSelected]}
+                        onPress={() => selectGender(opt.id)}
+                      >
+                        <Text style={[styles.genderPillText, isSelected && styles.genderPillTextSelected]}>
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    );
+                  })}
+                </View>
+              </Animated.View>
+
+              <Animated.View entering={FadeInDown.duration(500).delay(800)} style={styles.actions}>
+                <Button
+                  title="Next"
+                  onPress={onNext}
+                  disabled={!firstName.trim()}
+                  size="lg"
+                />
+              </Animated.View>
+            </Container>
+          </KeyboardAware>
+        </View>
+      </TouchableWithoutFeedback>
+      <KeyboardDoneBar />
     </SafeArea>
   );
 }
@@ -120,7 +159,39 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: colors.border,
     paddingVertical: spacing.md,
-    marginBottom: spacing['2xl'],
+    marginBottom: spacing.xl,
+  },
+  genderLabel: {
+    ...typography.body,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+    marginBottom: spacing.xl,
+  },
+  genderPill: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
+  },
+  genderPillSelected: {
+    borderColor: colors.orangeMid,
+    backgroundColor: colors.orangeTint,
+  },
+  genderPillText: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  genderPillTextSelected: {
+    color: colors.orangeDeep,
+    fontFamily: fontFamilies.bodyBold,
   },
   actions: {
     marginTop: spacing.md,

@@ -39,6 +39,7 @@ import { UsProfileScreen } from '../screens/profile/UsProfileScreen';
 import { LoveBankScreen } from '../screens/profile/LoveBankScreen';
 import { LearningsHistoryScreen } from '../screens/profile/LearningsHistoryScreen';
 import { StartMediationScreen } from '../screens/session/StartMediationScreen';
+import { PreSessionReminderScreen } from '../screens/session/PreSessionReminderScreen';
 import { WaitingForPartnerScreen } from '../screens/session/WaitingForPartnerScreen';
 import { colors } from '../theme/colors';
 import { shadows } from '../theme/spacing';
@@ -50,6 +51,7 @@ export type MainNavigatorParamList = {
   SessionDetail: { id: string };
   StartSession: undefined;
   StartMediation: undefined;
+  PreSessionReminder: { sessionId: string };
   WaitingForPartner: { sessionId?: string } | undefined;
   Interview: { sessionId: string };
   InterviewComplete: { partnerName?: string } | undefined;
@@ -125,6 +127,7 @@ export function MainNavigator() {
       <Stack.Screen name="SessionDetail" component={SessionDetailScreen} />
       <Stack.Screen name="StartSession" component={StartSessionScreen} />
       <Stack.Screen name="StartMediation" component={StartMediationScreen} />
+      <Stack.Screen name="PreSessionReminder" component={PreSessionReminderScreen} />
       <Stack.Screen name="WaitingForPartner" component={WaitingForPartnerScreen} />
       <Stack.Screen name="Interview">
         {({ route, navigation }) => (

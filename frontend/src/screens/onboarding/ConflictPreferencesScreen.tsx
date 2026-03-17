@@ -12,6 +12,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Container } from '../../components/layout/Container';
 import { Button } from '../../components/ui/Button';
@@ -68,7 +69,7 @@ export function ConflictPreferencesScreen({
     store.resolutionSpeed.length > 0 && store.attachmentStyle.length > 0;
 
   return (
-    <SafeArea style={{ backgroundColor: colors.bgPrimary }} edges={['top']}>
+    <SafeArea style={{ backgroundColor: colors.bgPrimary }}>
       {/* Progress bar */}
       <View style={styles.progressTrack}>
         <View
@@ -77,6 +78,7 @@ export function ConflictPreferencesScreen({
       </View>
 
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
@@ -209,7 +211,7 @@ export function ConflictPreferencesScreen({
       </ScrollView>
 
       <View style={styles.actions}>
-        <Container>
+        <View style={styles.actionsInner}>
           <Button
             title="Continue"
             onPress={onNext}
@@ -217,8 +219,8 @@ export function ConflictPreferencesScreen({
             size="lg"
             style={styles.continueBtn}
           />
-          <Button title="Back" onPress={onBack} variant="ghost" />
-        </Container>
+          <Button title="Back" onPress={onBack} variant="ghost" size="sm" />
+        </View>
       </View>
     </SafeArea>
   );
@@ -233,6 +235,9 @@ const styles = StyleSheet.create({
     height: 3,
     backgroundColor: colors.orangeMid,
     borderRadius: 2,
+  },
+  scrollView: {
+    flex: 1,
   },
   scroll: {
     paddingTop: spacing.xl,
@@ -332,12 +337,16 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.bodyBold,
   },
   actions: {
-    paddingVertical: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.bgSecondary,
     backgroundColor: colors.bgPrimary,
   },
+  actionsInner: {
+    paddingHorizontal: 20,
+  },
   continueBtn: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
 });

@@ -11,23 +11,36 @@
  */
 
 import React, { useState, useRef, useEffect } from 'react';
-import { View, Text, TextInput, StyleSheet, Pressable, ScrollView } from 'react-native';
+import { View, Text, TextInput, StyleSheet, Pressable, ScrollView, Keyboard, TouchableWithoutFeedback } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Container } from '../../components/layout/Container';
-import { KeyboardAware } from '../../components/layout/KeyboardAware';
+
 import { Button } from '../../components/ui/Button';
+import { KeyboardDoneBar, KEYBOARD_DONE_ID } from '../../components/ui/KeyboardDoneBar';
 import { colors, fontFamilies, typography, spacing, radius } from '../../theme';
-import { useOnboardingStore } from '../../store/onboardingStore';
+import { useOnboardingStore, PRONOUN_MAP } from '../../store/onboardingStore';
+import type { Gender } from '../../store/onboardingStore';
 import { selectionTap } from '../../utils/haptics';
 
-const COMMUNICATION_OPTIONS = [
-  { id: 'withdraw', label: 'They withdraw and go quiet' },
-  { id: 'talk', label: 'They need to talk it out immediately' },
-  { id: 'analyze', label: 'They overthink and analyze everything' },
-  { id: 'emotional', label: 'They get emotional and reactive' },
-  { id: 'avoid', label: 'They avoid the topic entirely' },
+const GENDER_OPTIONS: { id: Gender; label: string }[] = [
+  { id: 'male', label: 'Male' },
+  { id: 'female', label: 'Female' },
+  { id: 'non-binary', label: 'Non-binary' },
+  { id: 'prefer-not-to-say', label: 'Prefer not to say' },
 ];
+
+function getCommOptions(subject: string) {
+  const cap = subject.charAt(0).toUpperCase() + subject.slice(1);
+  return [
+    { id: 'withdraw', label: `${cap} withdraw${subject === 'they' ? '' : 's'} and go${subject === 'they' ? '' : 'es'} quiet` },
+    { id: 'talk', label: `${cap} need${subject === 'they' ? '' : 's'} to talk it out immediately` },
+    { id: 'analyze', label: `${cap} overthink${subject === 'they' ? '' : 's'} and analyze${subject === 'they' ? '' : 's'} everything` },
+    { id: 'emotional', label: `${cap} get${subject === 'they' ? '' : 's'} emotional and reactive` },
+    { id: 'avoid', label: `${cap} avoid${subject === 'they' ? '' : 's'} the topic entirely` },
+  ];
+}
 
 const CONFLICT_OPTIONS = [
   { id: 'unheard', label: 'Feeling unheard or dismissed' },
@@ -108,9 +121,11 @@ export function PartnerDetailsScreen({
 
   const subProgress = progress + (step / TOTAL_STEPS) * (1 / 10);
   const partnerName = store.partnerName || 'your partner';
+  const pronouns = PRONOUN_MAP[store.partnerGender] || PRONOUN_MAP['prefer-not-to-say'];
+  const commOptions = getCommOptions(pronouns.subject);
 
   const renderPills = (
-    options: typeof COMMUNICATION_OPTIONS,
+    options: { id: string; label: string }[],
     selected: string[],
     onToggle: (id: string) => void,
   ) => (
@@ -160,9 +175,30 @@ export function PartnerDetailsScreen({
               onChangeText={(text) => store.setField('partnerName', text)}
               autoCapitalize="words"
               autoCorrect={false}
-              returnKeyType="next"
-              onSubmitEditing={() => canContinue() && handleNext()}
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+              inputAccessoryViewID={KEYBOARD_DONE_ID}
             />
+            <Text style={styles.genderLabel}>How does your partner identify?</Text>
+            <View style={styles.genderRow}>
+              {GENDER_OPTIONS.map((opt) => {
+                const isSelected = store.partnerGender === opt.id;
+                return (
+                  <Pressable
+                    key={opt.id}
+                    style={[styles.genderPill, isSelected && styles.genderPillSelected]}
+                    onPress={() => {
+                      selectionTap();
+                      store.setField('partnerGender', opt.id);
+                    }}
+                  >
+                    <Text style={[styles.genderPillText, isSelected && styles.genderPillTextSelected]}>
+                      {opt.label}
+                    </Text>
+                  </Pressable>
+                );
+              })}
+            </View>
           </Animated.View>
         );
 
@@ -170,13 +206,13 @@ export function PartnerDetailsScreen({
         return (
           <Animated.View key="partner-comm" entering={FadeInDown.duration(500)}>
             <Text style={styles.title}>
-              When {partnerName} is upset, they tend to...
+              When {partnerName} is upset, {pronouns.subject} tend{pronouns.subject === 'they' ? '' : 's'} to...
             </Text>
             <Text style={styles.subtitle}>
               Your best guess is enough.
             </Text>
             {renderPills(
-              COMMUNICATION_OPTIONS,
+              commOptions,
               store.partnerCommunicationStyles,
               togglePartnerComm,
             )}
@@ -217,18 +253,25 @@ export function PartnerDetailsScreen({
         />
       </View>
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <Container>
-          {renderStep()}
-        </Container>
-      </ScrollView>
+      <KeyboardDoneBar />
+      <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+        <View style={{ flex: 1 }}>
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scroll}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            keyboardDismissMode="on-drag"
+          >
+            <Container>
+              {renderStep()}
+            </Container>
+          </ScrollView>
+        </View>
+      </TouchableWithoutFeedback>
 
       <View style={styles.actions}>
-        <Container>
+        <View style={styles.actionsInner}>
           {/* Step indicator */}
           <View style={styles.stepDots}>
             {Array.from({ length: TOTAL_STEPS }).map((_, i) => (
@@ -249,8 +292,8 @@ export function PartnerDetailsScreen({
             size="lg"
             style={styles.nextBtn}
           />
-          <Button title="Back" onPress={handleBack} variant="ghost" />
-        </Container>
+          <Button title="Back" onPress={handleBack} variant="ghost" size="sm" />
+        </View>
       </View>
     </SafeArea>
   );
@@ -266,10 +309,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.orangeMid,
     borderRadius: 2,
   },
+  scrollView: {
+    flex: 1,
+  },
   scroll: {
     paddingTop: spacing['2xl'],
     paddingBottom: spacing.md,
-    flexGrow: 1,
   },
   title: {
     fontFamily: fontFamilies.display,
@@ -291,6 +336,38 @@ const styles = StyleSheet.create({
     borderBottomWidth: 2,
     borderBottomColor: colors.border,
     paddingVertical: spacing.md,
+    marginBottom: spacing.xl,
+  },
+  genderLabel: {
+    ...typography.body,
+    color: colors.textMuted,
+    marginBottom: spacing.sm,
+  },
+  genderRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: spacing.sm,
+  },
+  genderPill: {
+    paddingVertical: spacing.sm,
+    paddingHorizontal: spacing.md,
+    borderRadius: radius.pill,
+    borderWidth: 1.5,
+    borderColor: colors.border,
+    backgroundColor: colors.bgElevated,
+  },
+  genderPillSelected: {
+    borderColor: colors.orangeMid,
+    backgroundColor: colors.orangeTint,
+  },
+  genderPillText: {
+    ...typography.body,
+    fontSize: 14,
+    color: colors.textSecondary,
+  },
+  genderPillTextSelected: {
+    color: colors.orangeDeep,
+    fontFamily: fontFamilies.bodyBold,
   },
   pillContainer: {
     gap: spacing.sm + 4,
@@ -317,9 +394,14 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.bodyBold,
   },
   actions: {
-    paddingVertical: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.bgSecondary,
+    backgroundColor: colors.bgPrimary,
+  },
+  actionsInner: {
+    paddingHorizontal: 20,
   },
   stepDots: {
     flexDirection: 'row',
@@ -341,6 +423,6 @@ const styles = StyleSheet.create({
     backgroundColor: colors.orangeLight,
   },
   nextBtn: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
 });

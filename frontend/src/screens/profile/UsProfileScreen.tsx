@@ -13,14 +13,13 @@
  * Used as the "Us" tab in bottom navigation and also accessible from the stack.
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
-  Dimensions,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -32,7 +31,6 @@ import {
   CheckCircle,
   Clock,
   Plus,
-  BookOpen,
   Settings,
   Shield,
   Bell,
@@ -45,41 +43,42 @@ import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
 import { colors, fontFamilies, typography, spacing, radius, shadows } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
+import { useSessionList } from '../../hooks/useSession';
 import { formatDate } from '../../utils/format';
 import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
 
 type Navigation = NativeStackNavigationProp<MainNavigatorParamList>;
 
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
-
-/**
- * Placeholder data -- in production these would come from the API.
- */
-const MOCK_STATS = {
-  mediationsCompleted: 3,
-  commitmentsKept: 7,
-  daysSinceLastSession: 2,
-};
-
-const MOCK_LOVE_BANK = [
-  { id: '1', text: 'Made breakfast together on Sunday', date: '2026-03-05' },
-  { id: '2', text: 'Long walk in the park, talked about dreams', date: '2026-03-01' },
-  { id: '3', text: 'Surprise flowers after a hard week', date: '2026-02-20' },
-];
-
-const MOCK_LEARNINGS = [
-  { id: '1', text: 'Name my need instead of withdrawing.', date: '2026-03-04' },
-  { id: '2', text: 'Ask for a pause instead of shutting down.', date: '2026-02-28' },
-];
-
 export function UsProfileScreen() {
   const navigation = useNavigation<Navigation>();
   const user = useAuthStore((s) => s.user);
   const couple = useAuthStore((s) => s.couple);
+  const { sessions } = useSessionList();
 
   const userName = user?.name || 'You';
-  const partnerName = couple?.userB?.name || 'Partner';
-  const togetherSince = couple?.createdAt ? formatDate(couple.createdAt) : 'Recently';
+  const isUserA = user?.id === couple?.userAId;
+  const partnerName = isUserA
+    ? (couple?.userB?.name || 'Partner')
+    : (couple?.userA?.name || 'Partner');
+  const togetherSince = couple?.datingStartDate || (couple?.createdAt ? formatDate(couple.createdAt) : 'Recently');
+
+  const togetherDays = useMemo(() => {
+    const dateStr = couple?.datingStartDate || couple?.createdAt;
+    if (!dateStr) return null;
+    const parsed = new Date(dateStr);
+    if (isNaN(parsed.getTime())) return null;
+    return Math.max(0, Math.floor((Date.now() - parsed.getTime()) / (1000 * 60 * 60 * 24)));
+  }, [couple?.datingStartDate, couple?.createdAt]);
+
+  const stats = useMemo(() => {
+    const resolvedSessions = sessions.filter(s => s.status === 'resolved');
+    const mediations = resolvedSessions.length;
+    const lastSession = sessions[0]; // most recent regardless of status
+    const daysSince = lastSession
+      ? Math.floor((Date.now() - new Date(lastSession.createdAt).getTime()) / (1000 * 60 * 60 * 24))
+      : null;
+    return { mediationsCompleted: mediations, commitmentsKept: 0, daysSinceLastSession: daysSince };
+  }, [sessions]);
 
   return (
     <View style={styles.container}>
@@ -104,11 +103,11 @@ export function UsProfileScreen() {
 
           {/* Overlapping avatars */}
           <Animated.View entering={FadeIn.delay(200).duration(500)} style={styles.avatarRow}>
-            <Avatar name={userName} size="xl" partnerRole="A" />
+            <Avatar name={userName} size="xl" partnerRole={isUserA ? "A" : "B"} />
             <Avatar
               name={partnerName}
               size="xl"
-              partnerRole="B"
+              partnerRole={isUserA ? "B" : "A"}
               style={styles.avatarOverlap}
             />
           </Animated.View>
@@ -123,7 +122,7 @@ export function UsProfileScreen() {
           <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.heartbeatRow}>
             <Heart size={14} color={colors.textInverse} fill={colors.textInverse} />
             <Text style={styles.heartbeatText}>
-              {MOCK_STATS.mediationsCompleted + MOCK_STATS.commitmentsKept} heartbeats
+              {stats.mediationsCompleted + stats.commitmentsKept} heartbeats
             </Text>
           </Animated.View>
         </LinearGradient>
@@ -136,17 +135,17 @@ export function UsProfileScreen() {
             <View style={styles.metricsRow}>
               <MetricCard
                 icon={<Sparkles size={18} color={colors.orangeMid} />}
-                value={MOCK_STATS.mediationsCompleted}
+                value={stats.mediationsCompleted}
                 label="Mediations"
               />
               <MetricCard
                 icon={<CheckCircle size={18} color={colors.success} />}
-                value={MOCK_STATS.commitmentsKept}
+                value={stats.commitmentsKept}
                 label="Commitments kept"
               />
               <MetricCard
                 icon={<Clock size={18} color={colors.partnerB} />}
-                value={MOCK_STATS.daysSinceLastSession}
+                value={stats.daysSinceLastSession}
                 label="Days since last"
               />
             </View>
@@ -158,19 +157,7 @@ export function UsProfileScreen() {
           {/* Love Bank section */}
           <Animated.View entering={FadeInDown.delay(600).duration(500)}>
             <Text style={styles.sectionTitle}>Your Love Bank</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.loveBankScroll}
-            >
-              {MOCK_LOVE_BANK.map((entry) => (
-                <Card key={entry.id} style={styles.loveBankCard} elevated>
-                  <Heart size={14} color={colors.orangeLight} fill={colors.orangeLight} />
-                  <Text style={styles.loveBankText}>{entry.text}</Text>
-                  <Text style={styles.loveBankDate}>{formatDate(entry.date)}</Text>
-                </Card>
-              ))}
-            </ScrollView>
+            <Text style={styles.emptyHint}>No moments yet</Text>
             <Button
               title="Add a moment"
               variant="secondary"
@@ -184,22 +171,7 @@ export function UsProfileScreen() {
           {/* Shared Learnings section */}
           <Animated.View entering={FadeInDown.delay(700).duration(500)}>
             <Text style={styles.sectionTitle}>Shared Learnings</Text>
-            {MOCK_LEARNINGS.map((learning) => (
-              <View key={learning.id} style={styles.learningRow}>
-                <BookOpen size={16} color={colors.orangeMid} />
-                <View style={styles.learningContent}>
-                  <Text style={styles.learningText}>{learning.text}</Text>
-                  <Text style={styles.learningDate}>{formatDate(learning.date)}</Text>
-                </View>
-              </View>
-            ))}
-            <Pressable
-              style={styles.viewAllLink}
-              onPress={() => navigation.navigate('LearningsHistory')}
-            >
-              <Text style={styles.viewAllText}>View all learnings</Text>
-              <ChevronRight size={16} color={colors.orangeMid} />
-            </Pressable>
+            <Text style={styles.emptyHint}>Complete your first session to see learnings here.</Text>
           </Animated.View>
 
           {/* Your Story section */}
@@ -210,7 +182,9 @@ export function UsProfileScreen() {
                 <Calendar size={16} color={colors.textMuted} />
                 <View style={styles.storyContent}>
                   <Text style={styles.storyLabel}>Together since</Text>
-                  <Text style={styles.storyValue}>{togetherSince}</Text>
+                  <Text style={styles.storyValue}>
+                    {togetherSince}{togetherDays !== null ? ` (${togetherDays} days)` : ''}
+                  </Text>
                 </View>
               </View>
               <Pressable style={styles.addStoryLink}>
@@ -251,13 +225,13 @@ function MetricCard({
   label,
 }: {
   icon: React.ReactNode;
-  value: number;
+  value: number | string | null;
   label: string;
 }) {
   return (
     <Card style={styles.metricCard} elevated>
       {icon}
-      <Text style={styles.metricValue}>{value}</Text>
+      <Text style={styles.metricValue}>{value ?? '-'}</Text>
       <Text style={styles.metricLabel}>{label}</Text>
     </Card>
   );
@@ -393,68 +367,16 @@ const styles = StyleSheet.create({
   },
 
   // ---- Love Bank ----
-  loveBankScroll: {
-    paddingRight: 24,
-    gap: 12,
-  },
-  loveBankCard: {
-    width: SCREEN_WIDTH * 0.55,
-    padding: 16,
-    gap: 8,
-  },
-  loveBankText: {
-    fontFamily: fontFamilies.body,
-    fontSize: 14,
-    lineHeight: 20,
-    color: colors.textPrimary,
-  },
-  loveBankDate: {
-    fontFamily: fontFamilies.body,
-    fontSize: 11,
-    color: colors.textMuted,
-  },
   addMomentBtn: {
     alignSelf: 'flex-start',
     marginTop: 12,
     marginBottom: 28,
   },
-
-  // ---- Learnings ----
-  learningRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    gap: 12,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: colors.border,
-  },
-  learningContent: {
-    flex: 1,
-  },
-  learningText: {
+  emptyHint: {
     fontFamily: fontFamilies.body,
     fontSize: 14,
-    lineHeight: 21,
-    color: colors.textPrimary,
-  },
-  learningDate: {
-    fontFamily: fontFamilies.body,
-    fontSize: 11,
     color: colors.textMuted,
-    marginTop: 2,
-  },
-  viewAllLink: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingVertical: 14,
-    justifyContent: 'center',
-    marginBottom: 20,
-  },
-  viewAllText: {
-    fontFamily: fontFamilies.bodyBold,
-    fontSize: 14,
-    color: colors.orangeMid,
+    fontStyle: 'italic',
   },
 
   // ---- Story ----

@@ -9,6 +9,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import Animated, { FadeInDown } from 'react-native-reanimated';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Container } from '../../components/layout/Container';
 import { Button } from '../../components/ui/Button';
@@ -37,6 +38,7 @@ export function CommunicationStyleScreen({
 }: CommunicationStyleScreenProps) {
   const selected = useOnboardingStore((s) => s.communicationStyles);
   const setField = useOnboardingStore((s) => s.setField);
+  const insets = useSafeAreaInsets();
 
   const toggleOption = (id: string) => {
     selectionTap();
@@ -48,7 +50,7 @@ export function CommunicationStyleScreen({
   };
 
   return (
-    <SafeArea style={{ backgroundColor: colors.bgPrimary }}>
+    <SafeArea testID="screen-root" style={{ backgroundColor: colors.bgPrimary }}>
       {/* Progress bar */}
       <View style={styles.progressTrack}>
         <View
@@ -57,6 +59,7 @@ export function CommunicationStyleScreen({
       </View>
 
       <ScrollView
+        style={styles.scrollView}
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
       >
@@ -79,6 +82,7 @@ export function CommunicationStyleScreen({
                   entering={FadeInDown.duration(400).delay(300 + index * 80)}
                 >
                   <Pressable
+                    testID={`pill-${option.id}`}
                     style={[
                       styles.pill,
                       isSelected && styles.pillSelected,
@@ -104,16 +108,17 @@ export function CommunicationStyleScreen({
       </ScrollView>
 
       <View style={styles.actions}>
-        <Container>
+        <View style={styles.actionsInner}>
           <Button
+            testID="cta-continue"
             title="Continue"
             onPress={onNext}
             disabled={selected.length === 0}
             size="lg"
             style={styles.continueBtn}
           />
-          <Button title="Back" onPress={onBack} variant="ghost" />
-        </Container>
+          <Button testID="cta-back" title="Back" onPress={onBack} variant="ghost" size="sm" />
+        </View>
       </View>
     </SafeArea>
   );
@@ -129,10 +134,12 @@ const styles = StyleSheet.create({
     backgroundColor: colors.orangeMid,
     borderRadius: 2,
   },
+  scrollView: {
+    flex: 1,
+  },
   scroll: {
     paddingTop: spacing['2xl'],
     paddingBottom: spacing.md,
-    flexGrow: 1,
   },
   title: {
     fontFamily: fontFamilies.display,
@@ -172,11 +179,16 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.bodyBold,
   },
   actions: {
-    paddingVertical: spacing.md,
+    paddingTop: spacing.lg,
+    paddingBottom: spacing.md,
     borderTopWidth: 1,
     borderTopColor: colors.bgSecondary,
+    backgroundColor: colors.bgPrimary,
+  },
+  actionsInner: {
+    paddingHorizontal: 20,
   },
   continueBtn: {
-    marginBottom: spacing.sm,
+    marginBottom: spacing.lg,
   },
 });

@@ -151,14 +151,22 @@ export function HomeScreen() {
   );
 
   const firstName = user?.name?.split(' ')[0] || 'there';
-  const partnerName = couple?.userB?.name?.split(' ')[0] || couple?.userA?.name?.split(' ')[0] || 'Partner';
+  const partnerName = useMemo(() => {
+    if (!couple) return 'Partner';
+    const isUserA = user?.id === couple.userAId;
+    const partner = isUserA ? couple.userB : couple.userA;
+    return partner?.name?.split(' ')[0] || 'Partner';
+  }, [user?.id, couple]);
 
-  // Calculate "together" days if couple exists
+  // Calculate "together" days — prefer datingStartDate (e.g. "July 2024"), fallback to createdAt
   const togetherDays = useMemo(() => {
-    if (!couple?.createdAt) return null;
-    const diff = Date.now() - new Date(couple.createdAt).getTime();
-    return Math.floor(diff / (1000 * 60 * 60 * 24));
-  }, [couple?.createdAt]);
+    const dateStr = couple?.datingStartDate || couple?.createdAt;
+    if (!dateStr) return null;
+    const parsed = new Date(dateStr);
+    if (isNaN(parsed.getTime())) return null;
+    const diff = Date.now() - parsed.getTime();
+    return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
+  }, [couple?.datingStartDate, couple?.createdAt]);
 
   return (
     <SafeArea>
@@ -184,7 +192,7 @@ export function HomeScreen() {
                 partnerRole="A"
               />
               <View style={styles.topBarGreeting}>
-                <Text style={styles.helloText}>Hello, {firstName}</Text>
+                <Text style={styles.helloText} numberOfLines={1}>Hello, {firstName}</Text>
                 <Text style={styles.helloEmoji}> 👋</Text>
               </View>
             </View>
@@ -333,16 +341,25 @@ export function HomeScreen() {
             >
               <Pressable
                 style={styles.quickPill}
-                onPress={() => navigation.navigate('SessionList')}
+                onPress={() => {
+                  lightTap();
+                  navigation.navigate('LearningsHistory');
+                }}
               >
                 <BookOpen color={colors.orangeMid} size={16} />
                 <Text style={styles.quickPillText}>Our Learnings</Text>
               </Pressable>
-              <Pressable style={styles.quickPill}>
+              <Pressable
+                style={styles.quickPill}
+                onPress={() => addToast('Partner notes coming in the next update!', 'info')}
+              >
                 <MessageCircle color={colors.orangeMid} size={16} />
                 <Text style={styles.quickPillText}>Send Partner Note</Text>
               </Pressable>
-              <Pressable style={styles.quickPill}>
+              <Pressable
+                style={styles.quickPill}
+                onPress={() => addToast('Coming soon!', 'info')}
+              >
                 <Zap color={colors.orangeMid} size={16} />
                 <Text style={styles.quickPillText}>Check In</Text>
               </Pressable>
@@ -389,19 +406,25 @@ const styles = StyleSheet.create({
     marginBottom: spacing.lg,
   },
   topBarLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+    minWidth: 0,
   },
   topBarGreeting: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+    minWidth: 0,
+    overflow: 'hidden',
   },
   helloText: {
     ...typography.displayMd,
     color: colors.textInverse,
     fontSize: 28,
     lineHeight: 34,
+    flexShrink: 1,
   },
   helloEmoji: {
     fontSize: 26,
@@ -413,6 +436,7 @@ const styles = StyleSheet.create({
     height: 40,
     alignItems: 'center',
     justifyContent: 'center',
+    marginLeft: 8,
   },
   heroStats: {
     marginBottom: spacing.md,

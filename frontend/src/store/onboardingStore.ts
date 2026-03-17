@@ -8,9 +8,19 @@
 
 import { create } from 'zustand';
 
+export type Gender = 'male' | 'female' | 'non-binary' | 'prefer-not-to-say' | '';
+
+export const PRONOUN_MAP: Record<string, { subject: string; object: string; possessive: string }> = {
+  male: { subject: 'he', object: 'him', possessive: 'his' },
+  female: { subject: 'she', object: 'her', possessive: 'her' },
+  'non-binary': { subject: 'they', object: 'them', possessive: 'their' },
+  'prefer-not-to-say': { subject: 'they', object: 'them', possessive: 'their' },
+};
+
 export interface OnboardingData {
-  // Screen 3: Your Name
+  // Screen 3: Your Name + Gender
   firstName: string;
+  gender: Gender;
 
   // Screen 4a: Communication Style
   communicationStyles: string[];
@@ -26,6 +36,7 @@ export interface OnboardingData {
 
   // Screen 6: Partner Details
   partnerName: string;
+  partnerGender: Gender;
   partnerCommunicationStyles: string[];
   partnerConflictFeelings: string[];
 
@@ -47,6 +58,7 @@ interface OnboardingState extends OnboardingData {
 
 const initialData: OnboardingData = {
   firstName: '',
+  gender: '',
   communicationStyles: [],
   conflictFeelings: [],
   datingStartDate: '',
@@ -54,6 +66,7 @@ const initialData: OnboardingData = {
   howMet: '',
   firstDateLocation: '',
   partnerName: '',
+  partnerGender: '',
   partnerCommunicationStyles: [],
   partnerConflictFeelings: [],
   loveReasons: ['', '', ''],
