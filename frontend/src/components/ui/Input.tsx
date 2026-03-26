@@ -19,6 +19,7 @@ import {
   View,
   TextInput,
   Text,
+  Pressable,
   StyleSheet,
   type TextInputProps,
   type ViewStyle,
@@ -51,9 +52,11 @@ export function Input({
   containerStyle,
   leftIcon,
   rightIcon,
+  secureTextEntry,
   ...rest
 }: InputProps) {
   const [focused, setFocused] = useState(false);
+  const [secureVisible, setSecureVisible] = useState(false);
   const shakeX = useSharedValue(0);
   const inputRef = useRef<TextInput>(null);
 
@@ -104,14 +107,28 @@ export function Input({
           style={[
             styles.input,
             leftIcon ? { paddingLeft: 0 } : undefined,
-            rightIcon ? { paddingRight: 0 } : undefined,
+            (rightIcon || secureTextEntry) ? { paddingRight: 0 } : undefined,
           ]}
           placeholderTextColor={colors.textMuted}
           onFocus={handleFocus}
           onBlur={handleBlur}
           accessibilityLabel={label}
+          secureTextEntry={secureTextEntry && !secureVisible}
+          {...(secureTextEntry ? { textContentType: 'oneTimeCode', autoComplete: 'off' } : {})}
           {...rest}
         />
+        {secureTextEntry && (
+          <Pressable
+            onPress={() => setSecureVisible((v) => !v)}
+            style={styles.secureToggle}
+            hitSlop={8}
+            accessibilityLabel={secureVisible ? 'Hide password' : 'Show password'}
+          >
+            <Text style={styles.secureToggleText}>
+              {secureVisible ? 'Hide' : 'Show'}
+            </Text>
+          </Pressable>
+        )}
         {rightIcon && <View style={styles.iconRight}>{rightIcon}</View>}
       </View>
       {(error || helperText) && (
@@ -161,6 +178,16 @@ const styles = StyleSheet.create({
   },
   iconRight: {
     marginLeft: 10,
+  },
+  secureToggle: {
+    marginLeft: 10,
+    paddingVertical: 4,
+    paddingHorizontal: 2,
+  },
+  secureToggleText: {
+    fontFamily: 'DMSans_600SemiBold',
+    fontSize: 13,
+    color: colors.orangeMid,
   },
   helper: {
     fontFamily: 'DMSans_400Regular',

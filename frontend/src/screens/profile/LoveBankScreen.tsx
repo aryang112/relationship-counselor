@@ -38,6 +38,7 @@ import {
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
+import { KeyboardDoneBar, KEYBOARD_DONE_ID } from '../../components/ui/KeyboardDoneBar';
 import { colors, fontFamilies, typography, spacing, radius, shadows } from '../../theme';
 import { formatDate } from '../../utils/format';
 import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
@@ -123,6 +124,7 @@ export function LoveBankScreen() {
 
   return (
     <SafeArea>
+      <KeyboardDoneBar />
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -171,6 +173,7 @@ export function LoveBankScreen() {
                 style={styles.formInput}
                 multiline
                 autoFocus
+                inputAccessoryViewID={KEYBOARD_DONE_ID}
               />
               <View style={styles.formActions}>
                 <Button
@@ -210,6 +213,7 @@ export function LoveBankScreen() {
                       style={styles.editInput}
                       multiline
                       autoFocus
+                      inputAccessoryViewID={KEYBOARD_DONE_ID}
                     />
                     <View style={styles.editActions}>
                       <Pressable onPress={cancelEdit} style={styles.editBtn}>

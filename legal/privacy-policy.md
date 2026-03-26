@@ -35,6 +35,7 @@ We do not use your vent content to train AI models. Your words are yours.
 We do not sell your personal data to anyone.
 
 We share data only with:
+- **AI processing provider (Anthropic)** to generate mediation responses — your session content is sent via encrypted API calls and is not used to train AI models.
 - **Infrastructure providers** who run our servers, under strict data processing agreements.
 - **Payment processors**, for subscription billing only. They never see your session content.
 - **Law enforcement**, only if compelled by a valid court order or subpoena.

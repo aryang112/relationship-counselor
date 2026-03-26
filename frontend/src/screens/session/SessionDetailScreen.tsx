@@ -49,6 +49,7 @@ const STATUSES: SessionStatus[] = [
 const STATUS_LABELS: Record<SessionStatus, string> = {
   initiated: 'Started',
   in_progress: 'Interviews',
+  awaiting_partner_b: 'Awaiting Partner',
   unpacking_ready: 'Unpacking',
   reconnection: 'Reconnection',
   resolved: 'Resolved',

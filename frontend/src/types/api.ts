@@ -14,6 +14,12 @@ export interface AcceptInviteRequest {
   inviteToken: string;
 }
 
+export interface ValidateInviteResponse {
+  valid: boolean;
+  inviterName: string;
+  coupleId: string;
+}
+
 export interface SignAgreementRequest {
   confirm: boolean;
 }
@@ -28,6 +34,20 @@ export interface TranscriptionResponse {
 
 export interface RemindPartnerResponse {
   message: string;
+}
+
+// ── Partner B Context ──────────────────────────────────────────────
+
+export interface PartnerBContext {
+  topicTag: string;
+  initiatorName: string;
+  openingMessage: string;
+  contextForAI: {
+    issues: string[];
+    needs: string[];
+    emotions: string[];
+  };
+  hasDraft: boolean;
 }
 
 // ── Consent ────────────────────────────────────────────────────────

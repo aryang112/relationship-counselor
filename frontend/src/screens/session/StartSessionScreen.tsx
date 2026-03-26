@@ -31,6 +31,7 @@ import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { ArrowLeft } from 'lucide-react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
+import { KeyboardDoneBar, KEYBOARD_DONE_ID } from '../../components/ui/KeyboardDoneBar';
 import { createSession } from '../../services/sessions';
 import { colors, fontFamilies, spacing, radius, shadows } from '../../theme';
 import { useUIStore } from '../../store/uiStore';
@@ -68,6 +69,7 @@ export function StartSessionScreen() {
 
   return (
     <SafeArea>
+      <KeyboardDoneBar />
       <KeyboardAvoidingView
         style={styles.root}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -101,6 +103,7 @@ export function StartSessionScreen() {
               maxLength={1000}
               autoFocus
               textAlignVertical="top"
+              inputAccessoryViewID={KEYBOARD_DONE_ID}
             />
           </View>
           <Pressable

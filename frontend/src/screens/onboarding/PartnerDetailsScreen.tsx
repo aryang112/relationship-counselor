@@ -2,7 +2,8 @@
  * PartnerDetailsScreen — Multi-step screen capturing partner information.
  *
  * Steps:
- *   1. Partner's first name
+ *   0. Partner's first name + gender
+ *   1. Where was your first date? (free text)
  *   2. Partner's communication style (same pills as CommunicationStyleScreen)
  *   3. What the user thinks hurts their partner most
  *
@@ -50,7 +51,7 @@ const CONFLICT_OPTIONS = [
   { id: 'misunderstood', label: 'Being misunderstood' },
 ];
 
-const TOTAL_STEPS = 3;
+const TOTAL_STEPS = 4;
 
 interface PartnerDetailsScreenProps {
   onNext: () => void;
@@ -66,10 +67,15 @@ export function PartnerDetailsScreen({
   const [step, setStep] = useState(0);
   const store = useOnboardingStore();
   const inputRef = useRef<TextInput>(null);
+  const firstDateInputRef = useRef<TextInput>(null);
 
   useEffect(() => {
     if (step === 0) {
       const timer = setTimeout(() => inputRef.current?.focus(), 400);
+      return () => clearTimeout(timer);
+    }
+    if (step === 1) {
+      const timer = setTimeout(() => firstDateInputRef.current?.focus(), 400);
       return () => clearTimeout(timer);
     }
   }, [step]);
@@ -113,8 +119,9 @@ export function PartnerDetailsScreen({
   const canContinue = () => {
     switch (step) {
       case 0: return store.partnerName.trim().length > 0;
-      case 1: return store.partnerCommunicationStyles.length > 0;
-      case 2: return store.partnerConflictFeelings.length > 0;
+      case 1: return store.firstDateLocation.trim().length > 0;
+      case 2: return store.partnerCommunicationStyles.length > 0;
+      case 3: return store.partnerConflictFeelings.length > 0;
       default: return false;
     }
   };
@@ -204,6 +211,30 @@ export function PartnerDetailsScreen({
 
       case 1:
         return (
+          <Animated.View key="first-date" entering={FadeInDown.duration(500)}>
+            <Text style={styles.title}>
+              Where was your first date?
+            </Text>
+            <Text style={styles.subtitle}>
+              Just a fun detail to help set the tone.
+            </Text>
+            <TextInput
+              ref={firstDateInputRef}
+              style={styles.nameInput}
+              placeholder="e.g. A coffee shop, the park, a restaurant..."
+              placeholderTextColor={colors.textMuted}
+              value={store.firstDateLocation}
+              onChangeText={(text) => store.setField('firstDateLocation', text)}
+              autoCapitalize="sentences"
+              returnKeyType="done"
+              onSubmitEditing={Keyboard.dismiss}
+              inputAccessoryViewID={KEYBOARD_DONE_ID}
+            />
+          </Animated.View>
+        );
+
+      case 2:
+        return (
           <Animated.View key="partner-comm" entering={FadeInDown.duration(500)}>
             <Text style={styles.title}>
               When {partnerName} is upset, {pronouns.subject} tend{pronouns.subject === 'they' ? '' : 's'} to...
@@ -219,7 +250,7 @@ export function PartnerDetailsScreen({
           </Animated.View>
         );
 
-      case 2:
+      case 3:
         return (
           <Animated.View key="partner-conflict" entering={FadeInDown.duration(500)}>
             <Text style={styles.title}>

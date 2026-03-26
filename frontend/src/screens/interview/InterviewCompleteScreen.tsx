@@ -19,6 +19,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Button } from '../../components/ui/Button';
 import { colors, typography, fontFamilies, spacing, radius, shadows } from '../../theme';
+import { useAuthStore } from '../../store/authStore';
 
 interface InterviewCompleteScreenProps {
   partnerName?: string;
@@ -29,6 +30,15 @@ export function InterviewCompleteScreen({
   partnerName,
   onContinue,
 }: InterviewCompleteScreenProps) {
+  const user = useAuthStore((s) => s.user);
+  const couple = useAuthStore((s) => s.couple);
+  const resolvedPartnerName = partnerName || (() => {
+    if (!couple) return undefined;
+    const isUserA = user?.id === couple.userAId;
+    const partner = isUserA ? couple.userB : couple.userA;
+    return partner?.name?.split(' ')[0];
+  })();
+
   return (
     <SafeArea>
       <View style={styles.container}>
@@ -38,21 +48,24 @@ export function InterviewCompleteScreen({
         </View>
 
         {/* Title */}
-        <Text style={styles.title}>You did great</Text>
+        <Text style={styles.title}>
+          Thank you for sharing
+        </Text>
 
         {/* Body */}
         <Text style={styles.body}>
-          Thank you for being open and honest. Your responses are private and
-          will be used to create a thoughtful analysis of your situation.
+          That took courage. Your honesty helps us understand what's really
+          going on — and that's the first step toward something better
+          {resolvedPartnerName ? ` with ${resolvedPartnerName}` : ''}.
         </Text>
 
         {/* Partner wait note */}
         <View style={styles.waitCard}>
           <Text style={styles.waitIcon}>⏳</Text>
           <Text style={styles.waitNote}>
-            {partnerName
-              ? `Once ${partnerName} completes their interview, the unpacking will begin.`
-              : 'Once your partner completes their interview, the unpacking will begin.'}
+            {resolvedPartnerName
+              ? `Now it's ${resolvedPartnerName}'s turn to share their perspective. Once they do, we'll put it all together for you.`
+              : "Now it's your partner's turn to share. Once they do, we'll put it all together for you."}
           </Text>
         </View>
 

@@ -151,7 +151,7 @@ function PrivacyPolicyContent() {
       <Text style={styles.bodyText}>
         We do not sell, rent, or trade your personal information to third
         parties. Ever. We share data only with: (1) our AI processing provider
-        (OpenAI) to generate mediation responses — this data is sent via
+        (Anthropic) to generate mediation responses — this data is sent via
         encrypted API calls and is not used to train their models; (2) our
         infrastructure providers (cloud hosting, database) who are contractually
         bound to protect your data; (3) as required by law (see The Subpoena

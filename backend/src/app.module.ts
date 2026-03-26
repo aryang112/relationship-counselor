@@ -7,6 +7,8 @@ import { AuthModule } from './auth/auth.module';
 import { CouplesModule } from './modules/couples/couples.module';
 import { SessionsModule } from './modules/sessions/sessions.module';
 import { AiModule } from './modules/ai/ai.module';
+import { NotificationsModule } from './modules/notifications/notifications.module';
+import { ReconnectionModule } from './modules/reconnection/reconnection.module';
 
 @Module({
   imports: [
@@ -17,6 +19,8 @@ import { AiModule } from './modules/ai/ai.module';
     CouplesModule,
     SessionsModule,
     AiModule,
+    NotificationsModule,
+    ReconnectionModule,
   ],
   controllers: [AppController],
   providers: [PrismaService],

@@ -48,6 +48,7 @@ export function WaitingForPartnerScreen({
   // Pulsing animation for the two circles
   const pulseA = useSharedValue(1);
   const pulseB = useSharedValue(1);
+  const floatY = useSharedValue(0);
 
   useEffect(() => {
     pulseA.value = withRepeat(
@@ -69,6 +70,15 @@ export function WaitingForPartnerScreen({
         -1,
         false,
       ),
+    );
+
+    floatY.value = withRepeat(
+      withSequence(
+        withTiming(-6, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(6, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      true,
     );
   }, []);
 
@@ -100,18 +110,22 @@ export function WaitingForPartnerScreen({
     transform: [{ scale: pulseB.value }],
   }));
 
+  const floatStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: floatY.value }],
+  }));
+
   return (
     <SafeArea style={{ backgroundColor: colors.bgPrimary }}>
       <Container style={styles.container}>
         {/* Pulsing orbs */}
-        <View style={styles.orbContainer}>
+        <Animated.View style={[styles.orbContainer, floatStyle]}>
           <Animated.View style={[styles.orb, styles.orbOrange, orbAStyle]}>
             <Text style={styles.orbLabel}>You</Text>
           </Animated.View>
           <Animated.View style={[styles.orb, styles.orbBlue, orbBStyle]}>
             <Text style={styles.orbLabel}>?</Text>
           </Animated.View>
-        </View>
+        </Animated.View>
 
         {/* Status text */}
         <Animated.View entering={FadeInDown.duration(600).delay(300)}>

@@ -52,6 +52,9 @@ export interface OnboardingData {
 }
 
 interface OnboardingState extends OnboardingData {
+  /** Invite token stored when Partner B validates a code before registration */
+  pendingInviteToken: string | null;
+  setPendingInviteToken: (token: string | null) => void;
   setField: <K extends keyof OnboardingData>(key: K, value: OnboardingData[K]) => void;
   reset: () => void;
 }
@@ -79,6 +82,8 @@ const initialData: OnboardingData = {
 
 export const useOnboardingStore = create<OnboardingState>((set) => ({
   ...initialData,
+  pendingInviteToken: null,
+  setPendingInviteToken: (token) => set({ pendingInviteToken: token }),
   setField: (key, value) => set({ [key]: value }),
-  reset: () => set(initialData),
+  reset: () => set({ ...initialData, pendingInviteToken: null }),
 }));

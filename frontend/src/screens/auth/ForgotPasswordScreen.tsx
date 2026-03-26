@@ -22,6 +22,7 @@ import { Container } from '../../components/layout/Container';
 import { KeyboardAware } from '../../components/layout/KeyboardAware';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { KeyboardDoneBar, KEYBOARD_DONE_ID } from '../../components/ui/KeyboardDoneBar';
 import { colors } from '../../theme/colors';
 import { typography, fontFamilies } from '../../theme/typography';
 import { spacing, radius, shadows } from '../../theme/spacing';
@@ -68,6 +69,7 @@ export function ForgotPasswordScreen({ onBack }: ForgotPasswordScreenProps) {
 
   return (
     <SafeArea>
+      <KeyboardDoneBar />
       <KeyboardAware style={styles.content}>
         <Container>
           <Text style={styles.title}>
@@ -83,6 +85,7 @@ export function ForgotPasswordScreen({ onBack }: ForgotPasswordScreenProps) {
             autoCapitalize="none"
             value={email}
             onChangeText={setEmail}
+            inputAccessoryViewID={KEYBOARD_DONE_ID}
           />
           <Button
             title="Send reset link"

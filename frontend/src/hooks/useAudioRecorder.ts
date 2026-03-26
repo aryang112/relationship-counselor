@@ -19,6 +19,11 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       const status = await AudioModule.requestRecordingPermissionsAsync();
       if (!status.granted) return;
 
+      await AudioModule.setAudioModeAsync({
+        allowsRecording: true,
+        playsInSilentMode: true,
+      });
+
       await recorder.prepareToRecordAsync();
       recorder.record();
       setIsRecording(true);
@@ -32,6 +37,10 @@ export function useAudioRecorder(): UseAudioRecorderReturn {
       if (!isRecording) return null;
       setIsRecording(false);
       await recorder.stop();
+      await AudioModule.setAudioModeAsync({
+        allowsRecording: false,
+        playsInSilentMode: false,
+      });
       const uri = recorder.uri;
       setRecordingUri(uri);
       return uri;

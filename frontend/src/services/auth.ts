@@ -1,9 +1,10 @@
 import { api, setAuthToken, clearAuthToken, setStoredUser, clearStoredUser } from './api';
-import type { AuthResponse, LoginRequest, RegisterRequest } from '../types/user';
+import type { AuthResponse, LoginRequest, RegisterRequest, UserSummary } from '../types/user';
 import type { Couple } from '../types/session';
 import type {
   InviteResponse,
   AcceptInviteRequest,
+  ValidateInviteResponse,
   SignAgreementRequest,
   RecordConsentRequest,
   RecordConsentResponse,
@@ -24,6 +25,11 @@ export async function login(data: LoginRequest): Promise<AuthResponse> {
   return res.data;
 }
 
+export async function getMe(): Promise<UserSummary> {
+  const res = await api.get<UserSummary>('/auth/me');
+  return res.data;
+}
+
 export async function logout(): Promise<void> {
   await clearAuthToken();
   await clearStoredUser();
@@ -31,6 +37,15 @@ export async function logout(): Promise<void> {
 
 export async function createInvite(): Promise<InviteResponse> {
   const res = await api.post<InviteResponse>('/couples/invite');
+  return res.data;
+}
+
+/**
+ * Validates an invite token WITHOUT requiring authentication.
+ * Used by Partner B before they create an account.
+ */
+export async function validateInvite(inviteToken: string): Promise<ValidateInviteResponse> {
+  const res = await api.post<ValidateInviteResponse>('/couples/validate-invite', { inviteToken });
   return res.data;
 }
 
@@ -66,5 +81,15 @@ export async function recordConsent(data: RecordConsentRequest): Promise<RecordC
 
 export async function getConsentStatus(): Promise<ConsentStatusResponse> {
   const res = await api.get<ConsentStatusResponse>('/auth/consent-status');
+  return res.data;
+}
+
+export async function recordAiConsent(): Promise<{ message: string; aiConsentAgreedAt: string }> {
+  const res = await api.post('/auth/ai-consent');
+  return res.data;
+}
+
+export async function deleteAccount(reason?: string): Promise<{ message: string }> {
+  const res = await api.delete('/auth/account', { data: { reason } });
   return res.data;
 }

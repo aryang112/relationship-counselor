@@ -10,16 +10,18 @@
  *   - Both partners agree: checkmark button
  *   - View All Learnings link + Return Home button
  *
- * Preserves useReconnection hook: completeReconnection action.
+ * Wired to real API: generates commitment on mount, handles agreement
+ * from both partners, and completes the session when both agree.
  */
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -39,49 +41,73 @@ import { Button } from '../../components/ui/Button';
 import { useReconnection } from '../../hooks/useReconnection';
 import { colors, fontFamilies, typography, spacing, radius, shadows } from '../../theme';
 import { useUIStore } from '../../store/uiStore';
+import { useAuthStore } from '../../store/authStore';
 import { formatDate } from '../../utils/format';
 import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
 
 type Navigation = NativeStackNavigationProp<MainNavigatorParamList>;
 type CommitmentsRoute = RouteProp<MainNavigatorParamList, 'Commitments'>;
 
-/**
- * AI-suggested commitments/learnings from the session.
- * In production these would come from the API; placeholder content for now.
- */
-const AI_LEARNING = {
-  text: 'When I feel unheard, I will name my need instead of withdrawing. When you feel overwhelmed, you will ask for a pause instead of shutting down.',
-  date: new Date().toISOString(),
-};
-
 export function CommitmentsScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<CommitmentsRoute>();
   const addToast = useUIStore((s) => s.addToast);
+  const couple = useAuthStore((s) => s.couple);
 
-  const { completeReconnection, loading } = useReconnection(
-    route.params.sessionId,
-    'Partner',
-  );
+  const partnerName = couple?.userB?.name || 'Your partner';
 
-  const [agreed, setAgreed] = useState(false);
+  const {
+    commitment,
+    loading,
+    generateCommitment,
+    agreeToCommitment,
+    completeReconnection,
+  } = useReconnection(route.params.sessionId, partnerName);
+
+  const [generatingCommitment, setGeneratingCommitment] = useState(false);
+  const [agreeing, setAgreeing] = useState(false);
+  const [completing, setCompleting] = useState(false);
   const [saved, setSaved] = useState(false);
 
-  const sessionDate = useMemo(() => formatDate(AI_LEARNING.date), []);
+  const sessionDate = useMemo(() => formatDate(new Date().toISOString()), []);
 
-  const handleAgree = () => {
-    setAgreed(true);
+  // On mount, if no commitment exists, generate one
+  useEffect(() => {
+    if (!loading && !commitment && !generatingCommitment) {
+      setGeneratingCommitment(true);
+      generateCommitment().finally(() => setGeneratingCommitment(false));
+    }
+  }, [loading, commitment, generateCommitment, generatingCommitment]);
+
+  const myAgreed = commitment?.userAAgreed || false;
+  const partnerAgreed = commitment?.userBAgreed || false;
+  const bothAgreed = myAgreed && partnerAgreed;
+
+  const handleAgree = async () => {
+    setAgreeing(true);
+    try {
+      await agreeToCommitment();
+    } catch {
+      addToast('Could not record your agreement.', 'error');
+    } finally {
+      setAgreeing(false);
+    }
   };
 
   const handleSave = async () => {
+    setCompleting(true);
     try {
       await completeReconnection();
       setSaved(true);
       addToast('Learning saved. You are both growing.', 'success');
     } catch {
       addToast('Could not save learning yet.', 'error');
+    } finally {
+      setCompleting(false);
     }
   };
+
+  const isLoading = loading || generatingCommitment;
 
   return (
     <View style={styles.container}>
@@ -119,7 +145,16 @@ export function CommitmentsScreen() {
                   <Text style={styles.quoteMarkText}>"</Text>
                 </View>
               </View>
-              <Text style={styles.learningText}>{AI_LEARNING.text}</Text>
+              {isLoading ? (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color={colors.orangeMid} />
+                  <Text style={styles.loadingText}>Generating your shared learning...</Text>
+                </View>
+              ) : (
+                <Text style={styles.learningText}>
+                  {commitment?.text || 'Your shared learning will appear here after the AI generates it.'}
+                </Text>
+              )}
               <View style={styles.attributionRow}>
                 <BookOpen size={12} color={colors.textMuted} />
                 <Text style={styles.attributionText}>
@@ -131,12 +166,19 @@ export function CommitmentsScreen() {
 
           {/* Agreement section */}
           <Animated.View entering={FadeInDown.delay(400).duration(500)} style={styles.agreeSection}>
-            {!agreed ? (
-              <Pressable onPress={handleAgree} style={styles.agreeBtn}>
+            {/* My agreement */}
+            {!myAgreed ? (
+              <Pressable
+                onPress={handleAgree}
+                disabled={isLoading || !commitment || agreeing}
+                style={[styles.agreeBtn, (isLoading || !commitment) && styles.agreeBtnDisabled]}
+              >
                 <View style={styles.checkbox}>
                   <Check size={14} color={colors.textInverse} strokeWidth={3} />
                 </View>
-                <Text style={styles.agreeLabel}>I agree to remember this</Text>
+                <Text style={styles.agreeLabel}>
+                  {agreeing ? 'Agreeing...' : 'I agree to remember this'}
+                </Text>
               </Pressable>
             ) : (
               <Animated.View entering={FadeIn.duration(400)} style={styles.agreedRow}>
@@ -147,11 +189,28 @@ export function CommitmentsScreen() {
               </Animated.View>
             )}
 
-            {agreed && !saved && (
+            {/* Partner agreement status */}
+            {myAgreed && !bothAgreed && (
               <Animated.View entering={FadeInDown.delay(200).duration(400)}>
                 <Text style={styles.waitingText}>
-                  Waiting for your partner to agree too...
+                  Waiting for {partnerName} to agree...
                 </Text>
+              </Animated.View>
+            )}
+
+            {partnerAgreed && !myAgreed && (
+              <Animated.View entering={FadeIn.duration(400)} style={styles.partnerAgreedRow}>
+                <Check size={14} color={colors.success} strokeWidth={3} />
+                <Text style={styles.partnerAgreedText}>
+                  {partnerName} has agreed
+                </Text>
+              </Animated.View>
+            )}
+
+            {bothAgreed && !saved && (
+              <Animated.View entering={FadeIn.duration(400)} style={styles.savedBadge}>
+                <Heart size={14} color={colors.success} fill={colors.success} />
+                <Text style={styles.savedText}>Both partners agreed!</Text>
               </Animated.View>
             )}
 
@@ -165,11 +224,11 @@ export function CommitmentsScreen() {
 
           {/* Bottom actions */}
           <Animated.View entering={FadeInDown.delay(600).duration(500)} style={styles.actions}>
-            {agreed && (
+            {bothAgreed && !saved && (
               <Button
-                title="Save & Continue"
+                title="Save & Complete"
                 onPress={handleSave}
-                loading={loading}
+                loading={completing}
                 style={styles.saveBtn}
               />
             )}
@@ -269,6 +328,17 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     marginBottom: 20,
   },
+  loadingContainer: {
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 20,
+  },
+  loadingText: {
+    fontFamily: fontFamilies.body,
+    fontSize: 14,
+    color: colors.textMuted,
+    fontStyle: 'italic',
+  },
   attributionRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -298,6 +368,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.border,
     ...shadows.sm,
+  },
+  agreeBtnDisabled: {
+    opacity: 0.5,
   },
   checkbox: {
     width: 28,
@@ -330,6 +403,18 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.bodyBold,
     fontSize: 15,
     color: colors.orangeDeep,
+  },
+  partnerAgreedRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+  },
+  partnerAgreedText: {
+    fontFamily: fontFamilies.body,
+    fontSize: 13,
+    color: colors.success,
   },
   waitingText: {
     fontFamily: fontFamilies.body,

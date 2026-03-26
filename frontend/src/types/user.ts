@@ -15,6 +15,7 @@ export interface UserSummary {
   id: string;
   email: string;
   name: string;
+  gender?: string;
 }
 
 export interface AuthResponse {

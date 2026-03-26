@@ -21,6 +21,7 @@ import {
   ScrollView,
   Share,
   Pressable,
+  Linking,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -33,11 +34,17 @@ import {
   ChevronRight,
   UserPlus,
   LogOut,
+  FileText,
+  Brain,
+  Trash2,
+  Heart,
+  Mail,
 } from 'lucide-react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Header } from '../../components/layout/Header';
-import { Container } from '../../components/layout/Container';
 import { Button } from '../../components/ui/Button';
+import { LegalDocumentModal } from '../../components/domain/LegalDocumentModal';
+import { CrisisResourcesModal } from '../../components/domain/CrisisResourcesModal';
 import { colors } from '../../theme/colors';
 import { fontFamilies } from '../../theme/typography';
 import { spacing, radius, shadows } from '../../theme/spacing';
@@ -97,6 +104,8 @@ export function SettingsScreen() {
   const setCouple = useAuthStore((s) => s.setCouple);
   const addToast = useUIStore((s) => s.addToast);
   const [inviteLoading, setInviteLoading] = useState(false);
+  const [legalDoc, setLegalDoc] = useState<'terms' | 'privacy' | null>(null);
+  const [crisisVisible, setCrisisVisible] = useState(false);
 
   const hasCoupleFormed = couple && couple.userBId;
 
@@ -205,8 +214,25 @@ export function SettingsScreen() {
         <Text style={styles.sectionTitle}>Privacy</Text>
         <View style={styles.section}>
           <MenuItem
-            icon={<Shield size={20} color={colors.textSecondary} strokeWidth={1.8} />}
-            label="Data & privacy"
+            icon={<FileText size={20} color={colors.textSecondary} strokeWidth={1.8} />}
+            label="Privacy Policy"
+            onPress={() => setLegalDoc('privacy')}
+          />
+          <MenuItem
+            icon={<FileText size={20} color={colors.textSecondary} strokeWidth={1.8} />}
+            label="Terms of Service"
+            onPress={() => setLegalDoc('terms')}
+          />
+          <MenuItem
+            icon={<Brain size={20} color={colors.textSecondary} strokeWidth={1.8} />}
+            label="AI Data Processing"
+            trailing={<Text style={styles.trailingText}>Consented</Text>}
+          />
+          <MenuItem
+            icon={<Trash2 size={20} color={colors.error} strokeWidth={1.8} />}
+            label="Delete Account"
+            onPress={() => navigation.navigate('DeleteAccount')}
+            danger
           />
         </View>
 
@@ -214,8 +240,19 @@ export function SettingsScreen() {
         <Text style={styles.sectionTitle}>About</Text>
         <View style={styles.section}>
           <MenuItem
+            icon={<Heart size={20} color={colors.textSecondary} strokeWidth={1.8} />}
+            label="Crisis Resources"
+            onPress={() => setCrisisVisible(true)}
+          />
+          <MenuItem
+            icon={<Mail size={20} color={colors.textSecondary} strokeWidth={1.8} />}
+            label="Contact Support"
+            onPress={() => Linking.openURL('mailto:support@relatehq.com')}
+          />
+          <MenuItem
             icon={<Info size={20} color={colors.textSecondary} strokeWidth={1.8} />}
             label="About Relate"
+            trailing={<Text style={styles.trailingText}>v1.0.0</Text>}
           />
         </View>
 
@@ -232,6 +269,19 @@ export function SettingsScreen() {
         {/* Version */}
         <Text style={styles.versionText}>Relate v1.0.0</Text>
       </ScrollView>
+
+      {/* Legal Document Modal */}
+      <LegalDocumentModal
+        visible={legalDoc !== null}
+        onClose={() => setLegalDoc(null)}
+        documentType={legalDoc || 'terms'}
+      />
+
+      {/* Crisis Resources Modal */}
+      <CrisisResourcesModal
+        visible={crisisVisible}
+        onClose={() => setCrisisVisible(false)}
+      />
     </SafeArea>
   );
 }

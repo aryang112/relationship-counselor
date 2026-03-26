@@ -21,9 +21,16 @@
 
 import React, { useCallback } from 'react';
 import { Pressable, Text, StyleSheet, type ViewStyle } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withSpring,
+} from 'react-native-reanimated';
 import { colors } from '../../theme/colors';
 import { radius } from '../../theme/spacing';
 import { lightTap } from '../../utils/haptics';
+
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
 interface EmotionPillProps {
   emoji: string;
@@ -40,17 +47,28 @@ export function EmotionPill({
   onPress,
   style,
 }: EmotionPillProps) {
+  const scale = useSharedValue(1);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
   const handlePress = useCallback(() => {
     lightTap();
+    scale.value = withSpring(1.08, { damping: 12, stiffness: 200 });
+    setTimeout(() => {
+      scale.value = withSpring(1, { damping: 14, stiffness: 180 });
+    }, 100);
     onPress?.();
-  }, [onPress]);
+  }, [onPress, scale]);
 
   return (
-    <Pressable
+    <AnimatedPressable
       style={[
         styles.pill,
         selected ? styles.pillSelected : styles.pillDefault,
         style,
+        animatedStyle,
       ]}
       onPress={handlePress}
       accessibilityRole="button"
@@ -66,7 +84,7 @@ export function EmotionPill({
       >
         {label}
       </Text>
-    </Pressable>
+    </AnimatedPressable>
   );
 }
 

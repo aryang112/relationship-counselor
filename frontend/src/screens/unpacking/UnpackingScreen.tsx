@@ -128,7 +128,7 @@ export function UnpackingScreen() {
         type: 'situation',
         eyebrow: 'THE SITUATION',
         title: 'Here\'s what happened.',
-        content: unpacking.surfaceConflict || '',
+        content: unpacking.surfaceConflict || 'Processing your conversation...',
         textColor: colors.textPrimary,
         subtitleColor: colors.textSecondary,
       },
@@ -137,7 +137,7 @@ export function UnpackingScreen() {
         type: 'partnerA',
         eyebrow: `${partnerAName.toUpperCase()} FELT...`,
         title: `${partnerAName} felt...`,
-        content: unpacking.partnerAExperience || '',
+        content: unpacking.partnerAExperience || 'Generating insights...',
         gradient: [colors.orangeLight, colors.orangeDeep] as [string, string],
         textColor: colors.textInverse,
         subtitleColor: 'rgba(255,255,255,0.8)',
@@ -147,7 +147,7 @@ export function UnpackingScreen() {
         type: 'partnerB',
         eyebrow: `${partnerBName.toUpperCase()} FELT...`,
         title: `${partnerBName} felt...`,
-        content: unpacking.partnerBExperience || '',
+        content: unpacking.partnerBExperience || 'Generating insights...',
         gradient: ['#A8C0D6', '#5A7A96'] as [string, string],
         textColor: colors.textInverse,
         subtitleColor: 'rgba(255,255,255,0.8)',
@@ -166,7 +166,7 @@ export function UnpackingScreen() {
         type: 'wires',
         eyebrow: 'THE BREAKTHROUGH',
         title: 'Where the wires crossed',
-        content: unpacking.deeperInsight || '',
+        content: unpacking.deeperInsight || 'Generating insights...',
         gradient: ['#C4A8D8', '#8B6AAA'] as [string, string],
         textColor: colors.textInverse,
         subtitleColor: 'rgba(255,255,255,0.8)',
@@ -185,7 +185,7 @@ export function UnpackingScreen() {
         type: 'forward',
         eyebrow: 'A PATH FORWARD',
         title: 'Where to go from here',
-        content: unpacking.patternRecognition || unpacking.deeperInsight || '',
+        content: unpacking.patternRecognition || unpacking.deeperInsight || 'Generating insights...',
         textColor: colors.textPrimary,
         subtitleColor: colors.textSecondary,
       },
@@ -258,14 +258,14 @@ export function UnpackingScreen() {
                 <View style={[styles.splitDot, { backgroundColor: colors.partnerA }]} />
                 <Text style={[styles.splitName, { color: colors.partnerA }]}>{partnerAName}</Text>
                 <Text style={[styles.cardContent, { color: item.textColor }]}>
-                  {unpacking?.partnerAExperience || ''}
+                  {unpacking?.partnerAExperience || 'Generating insights...'}
                 </Text>
               </View>
               <View style={styles.splitHalf}>
                 <View style={[styles.splitDot, { backgroundColor: colors.partnerB }]} />
                 <Text style={[styles.splitName, { color: colors.partnerB }]}>{partnerBName}</Text>
                 <Text style={[styles.cardContent, { color: item.textColor }]}>
-                  {unpacking?.partnerBExperience || ''}
+                  {unpacking?.partnerBExperience || 'Generating insights...'}
                 </Text>
               </View>
             </View>
@@ -362,7 +362,7 @@ export function UnpackingScreen() {
 
       {/* Header on dark bg */}
       <Animated.View entering={FadeInDown.duration(600)} style={styles.darkHeader}>
-        <Text style={styles.eyebrow}>relate \u00B7 phase 3</Text>
+        <Text style={styles.eyebrow}>relate · unpacking</Text>
         <Text style={styles.heroTitle}>Here's what{'\n'}we found.</Text>
         <View style={styles.avatarsRow}>
           <Avatar name={couple?.userA?.name || 'A'} size="sm" partnerRole="A" />

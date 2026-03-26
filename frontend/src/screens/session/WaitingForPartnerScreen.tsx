@@ -31,19 +31,10 @@ import { ArrowLeft, Clock } from 'lucide-react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { colors, fontFamilies, spacing, radius } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
+import { getGenderCopy } from '../../utils/genderCopy';
 import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
 
 type Navigation = NativeStackNavigationProp<MainNavigatorParamList>;
-
-/** Affirmation cards shown on a rotating basis */
-const AFFIRMATIONS = [
-  'The fact that you started this session means you care.',
-  'Conflict is not the enemy. Disconnection is.',
-  'You both love each other. That\'s why this hurts.',
-  'Vulnerability is the birthplace of connection.',
-  'You\'re doing something brave by being here.',
-  'Healing starts with the courage to show up.',
-];
 
 /** ETA text */
 const ETA_TEXT = 'Usually takes 5\u201315 minutes';
@@ -51,6 +42,8 @@ const ETA_TEXT = 'Usually takes 5\u201315 minutes';
 export function WaitingForPartnerScreen() {
   const navigation = useNavigation<Navigation>();
   const couple = useAuthStore((s) => s.couple);
+  const user = useAuthStore((s) => s.user);
+  const copy = getGenderCopy(user?.gender);
   const partnerName = couple?.userB?.name?.split(' ')[0] || 'Your partner';
 
   // ── Breathing circle animation ──
@@ -88,7 +81,7 @@ export function WaitingForPartnerScreen() {
         duration: 500,
         useNativeDriver: true,
       }).start(() => {
-        setAffirmationIndex((prev) => (prev + 1) % AFFIRMATIONS.length);
+        setAffirmationIndex((prev) => (prev + 1) % copy.affirmations.length);
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 500,
@@ -173,7 +166,7 @@ export function WaitingForPartnerScreen() {
             {/* Affirmation card */}
             <Animated.View style={[styles.affirmationCard, { opacity: fadeAnim }]}>
               <Text style={styles.affirmationText}>
-                {AFFIRMATIONS[affirmationIndex]}
+                {copy.affirmations[affirmationIndex % copy.affirmations.length]}
               </Text>
             </Animated.View>
           </View>

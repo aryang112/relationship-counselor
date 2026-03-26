@@ -1,10 +1,10 @@
 /**
  * RootNavigator — Top-level navigation controller.
  *
- * Determines which navigator to show based on authentication state:
- *   1. Auth → WelcomeScreen / Login / Register / ForgotPassword
- *   2. Onboarding → Splash → Promise → ... → Connected → Main
- *   3. Main → Bottom tabs + stack screens
+ * Determines which navigator to show based on authentication and onboarding state:
+ *   1. !onboardingDone → OnboardingNavigator (quiz-first: personal questions, then signup)
+ *   2. !isAuthenticated && onboardingDone → AuthNavigator (returning user who logged out)
+ *   3. isAuthenticated && onboardingDone → MainNavigator
  *
  * Also registers the push notification token when the user is authenticated.
  *
@@ -69,20 +69,21 @@ export function RootNavigator() {
     return <LoadingScreen message="Loading..." />;
   }
 
-  const needsOnboarding = isAuthenticated && !onboardingDone;
+  const showMain = isAuthenticated && onboardingDone;
+  const showAuth = !isAuthenticated && onboardingDone; // returning user who logged out
 
   return (
     <Stack.Navigator screenOptions={{ headerShown: false }}>
-      {!isAuthenticated ? (
+      {showMain ? (
+        <Stack.Screen name="Main" component={MainNavigator} />
+      ) : showAuth ? (
         <Stack.Screen name="Auth">
           {() => <AuthNavigator onAuthSuccess={() => {}} />}
         </Stack.Screen>
-      ) : needsOnboarding ? (
+      ) : (
         <Stack.Screen name="Onboarding">
           {() => <OnboardingNavigator onComplete={() => {}} />}
         </Stack.Screen>
-      ) : (
-        <Stack.Screen name="Main" component={MainNavigator} />
       )}
     </Stack.Navigator>
   );

@@ -63,6 +63,32 @@ export class CouplesService {
     return { couple, wasReminder: false };
   }
 
+  /**
+   * Validates an invite token without accepting it.
+   * Used by unauthenticated users (Partner B) to verify the token
+   * before they go through onboarding and registration.
+   */
+  async validateInvite(inviteToken: string) {
+    const invite = await this.prisma.couple.findUnique({
+      where: { inviteToken },
+      include: coupleInclude,
+    });
+
+    if (!invite) {
+      throw new NotFoundException('Invite not found or already used');
+    }
+
+    if (invite.userBId) {
+      throw new NotFoundException('Invite has already been accepted');
+    }
+
+    return {
+      valid: true,
+      inviterName: invite.userA?.name || 'Your partner',
+      coupleId: invite.id,
+    };
+  }
+
   async acceptInvite(userId: string, inviteToken: string) {
     const invite = await this.prisma.couple.findUnique({
       where: { inviteToken },

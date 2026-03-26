@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Container } from '../../components/layout/Container';
@@ -38,15 +38,21 @@ export function AgreementScreen({ onComplete }: AgreementScreenProps) {
     (user?.id === couple?.userAId && !!couple?.userASignedAt) ||
     (user?.id === couple?.userBId && !!couple?.userBSignedAt);
 
+  // If user already signed, proceed immediately
+  useEffect(() => {
+    if (userSigned) {
+      onComplete();
+    }
+  }, [userSigned, onComplete]);
+
   const handleSign = useCallback(async () => {
     setLoading(true);
     try {
       const updated = await signAgreement({ confirm: true });
       setCouple(updated);
       successTap();
-      if (updated.userASignedAt && updated.userBSignedAt) {
-        onComplete();
-      }
+      // Proceed immediately after signing — don't wait for partner
+      onComplete();
     } catch (err: any) {
       const msg = err?.response?.data?.message || 'Could not sign agreement';
       addToast(Array.isArray(msg) ? msg[0] : msg, 'error');
@@ -158,13 +164,6 @@ export function AgreementScreen({ onComplete }: AgreementScreenProps) {
             </>
           )}
 
-          {userSigned && (
-            <Card style={{ ...styles.waitCard, backgroundColor: colors.surface2 }}>
-              <Text style={[styles.waitText, { color: colors.textSecondary }]}>
-                You've signed! Waiting for your partner to sign too.
-              </Text>
-            </Card>
-          )}
         </Container>
       </ScrollView>
     </SafeArea>
@@ -244,13 +243,5 @@ const styles = StyleSheet.create({
   },
   signBtn: {
     marginBottom: 16,
-  },
-  waitCard: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  waitText: {
-    fontSize: 14,
-    textAlign: 'center',
   },
 });

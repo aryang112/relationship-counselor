@@ -23,6 +23,7 @@ import { Container } from '../../components/layout/Container';
 import { KeyboardAware } from '../../components/layout/KeyboardAware';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { KeyboardDoneBar, KEYBOARD_DONE_ID } from '../../components/ui/KeyboardDoneBar';
 import { colors } from '../../theme/colors';
 import { typography, fontFamilies } from '../../theme/typography';
 import { spacing, radius } from '../../theme/spacing';
@@ -30,6 +31,7 @@ import { registerSchema, type RegisterFormData } from '../../utils/validation';
 import { register } from '../../services/auth';
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
+import { useOnboardingStore } from '../../store/onboardingStore';
 import { successTap } from '../../utils/haptics';
 
 interface RegisterScreenProps {
@@ -74,9 +76,10 @@ export function RegisterScreen({ onNavigateLogin, onSuccess }: RegisterScreenPro
       Keyboard.dismiss();
       setLoading(true);
       try {
+        const onboardingName = useOnboardingStore.getState().firstName;
         const payload = {
           ...data,
-          name: data.email.split('@')[0],
+          name: onboardingName?.trim() || data.email.split('@')[0],
         };
         const res = await register(payload);
         setUser(res.user);
@@ -103,6 +106,7 @@ export function RegisterScreen({ onNavigateLogin, onSuccess }: RegisterScreenPro
 
   return (
     <SafeArea>
+      <KeyboardDoneBar />
       <KeyboardAware style={styles.content}>
         <Container>
           <View style={styles.header}>
@@ -128,6 +132,7 @@ export function RegisterScreen({ onNavigateLogin, onSuccess }: RegisterScreenPro
                 onChangeText={onChange}
                 onBlur={onBlur}
                 error={errors.email?.message}
+                inputAccessoryViewID={KEYBOARD_DONE_ID}
               />
             )}
           />
@@ -145,6 +150,7 @@ export function RegisterScreen({ onNavigateLogin, onSuccess }: RegisterScreenPro
                 onChangeText={onChange}
                 onBlur={onBlur}
                 error={errors.password?.message}
+                inputAccessoryViewID={KEYBOARD_DONE_ID}
               />
             )}
           />

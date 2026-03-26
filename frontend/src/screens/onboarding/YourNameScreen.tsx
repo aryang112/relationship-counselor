@@ -4,6 +4,10 @@
  * Minimal, warm layout with a single auto-focused text input.
  * Features a thin orange progress bar at the top and the "Next" button
  * remains disabled until a name is entered.
+ *
+ * This screen runs BEFORE authentication (quiz-first flow), so data is
+ * stored locally in onboardingStore only. The profile is persisted to
+ * the backend during finishOnboarding() after account creation.
  */
 
 import React, { useRef, useEffect } from 'react';
@@ -40,6 +44,12 @@ export function YourNameScreen({ onNext, progress }: YourNameScreenProps) {
   const selectGender = (id: Gender) => {
     selectionTap();
     setField('gender', id);
+  };
+
+  const handleNext = () => {
+    // Data is already in onboardingStore via setField — just advance.
+    // Profile is persisted to backend during finishOnboarding() after auth.
+    onNext();
   };
 
   useEffect(() => {
@@ -108,7 +118,7 @@ export function YourNameScreen({ onNext, progress }: YourNameScreenProps) {
               <Animated.View entering={FadeInDown.duration(500).delay(800)} style={styles.actions}>
                 <Button
                   title="Next"
-                  onPress={onNext}
+                  onPress={handleNext}
                   disabled={!firstName.trim()}
                   size="lg"
                 />

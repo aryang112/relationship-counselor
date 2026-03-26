@@ -30,6 +30,18 @@ export async function saveDraft(
   return res.data;
 }
 
+export async function getNextQuestion(
+  sessionId: string,
+  conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
+): Promise<string> {
+  const res = await api.post<{ question: string }>(
+    `/sessions/${sessionId}/interview/next-question`,
+    { conversationHistory },
+    { timeout: 30000 },
+  );
+  return res.data.question;
+}
+
 export async function transcribeAudio(audioUri: string): Promise<string> {
   const formData = new FormData();
   const filename = audioUri.split('/').pop() || 'recording.m4a';

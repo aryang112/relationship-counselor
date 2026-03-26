@@ -38,9 +38,11 @@ import { ProfileScreen } from '../screens/settings/ProfileScreen';
 import { UsProfileScreen } from '../screens/profile/UsProfileScreen';
 import { LoveBankScreen } from '../screens/profile/LoveBankScreen';
 import { LearningsHistoryScreen } from '../screens/profile/LearningsHistoryScreen';
+import { DeleteAccountScreen } from '../screens/settings/DeleteAccountScreen';
 import { StartMediationScreen } from '../screens/session/StartMediationScreen';
 import { PreSessionReminderScreen } from '../screens/session/PreSessionReminderScreen';
 import { WaitingForPartnerScreen } from '../screens/session/WaitingForPartnerScreen';
+import { PartnerBEntryScreen } from '../screens/session/PartnerBEntryScreen';
 import { colors } from '../theme/colors';
 import { shadows } from '../theme/spacing';
 
@@ -53,13 +55,15 @@ export type MainNavigatorParamList = {
   StartMediation: undefined;
   PreSessionReminder: { sessionId: string };
   WaitingForPartner: { sessionId?: string } | undefined;
-  Interview: { sessionId: string };
+  PartnerBEntry: { sessionId: string };
+  Interview: { sessionId: string; partnerBOpeningMessage?: string };
   InterviewComplete: { partnerName?: string } | undefined;
   UnpackingChoice: { sessionId: string };
   Unpacking: { sessionId: string };
   Reconnection: { sessionId: string };
   Commitments: { sessionId: string };
   Settings: undefined;
+  DeleteAccount: undefined;
   Profile: undefined;
   UsProfile: undefined;
   LoveBank: undefined;
@@ -129,10 +133,25 @@ export function MainNavigator() {
       <Stack.Screen name="StartMediation" component={StartMediationScreen} />
       <Stack.Screen name="PreSessionReminder" component={PreSessionReminderScreen} />
       <Stack.Screen name="WaitingForPartner" component={WaitingForPartnerScreen} />
-      <Stack.Screen name="Interview">
+      <Stack.Screen name="PartnerBEntry" options={{ animation: 'fade', animationDuration: 350 }}>
+        {({ route, navigation }) => (
+          <PartnerBEntryScreen
+            sessionId={route.params.sessionId}
+            onStartInterview={(openingMessage) =>
+              navigation.replace('Interview', {
+                sessionId: route.params.sessionId,
+                partnerBOpeningMessage: openingMessage,
+              })
+            }
+            onGoBack={() => navigation.goBack()}
+          />
+        )}
+      </Stack.Screen>
+      <Stack.Screen name="Interview" options={{ animation: 'fade', animationDuration: 400 }}>
         {({ route, navigation }) => (
           <InterviewScreen
             sessionId={route.params.sessionId}
+            partnerBOpeningMessage={route.params.partnerBOpeningMessage}
             onExit={() => navigation.goBack()}
             onComplete={() => navigation.replace('InterviewComplete', undefined)}
           />
@@ -151,6 +170,7 @@ export function MainNavigator() {
       <Stack.Screen name="Reconnection" component={ReconnectionScreen} />
       <Stack.Screen name="Commitments" component={CommitmentsScreen} />
       <Stack.Screen name="Settings" component={SettingsScreen} />
+      <Stack.Screen name="DeleteAccount" component={DeleteAccountScreen} />
       <Stack.Screen name="Profile" component={ProfileScreen} />
       <Stack.Screen name="UsProfile" component={UsProfileScreen} />
       <Stack.Screen name="LoveBank" component={LoveBankScreen} />

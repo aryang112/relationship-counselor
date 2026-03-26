@@ -63,12 +63,27 @@ api.interceptors.request.use(
   (error) => Promise.reject(error),
 );
 
+/**
+ * 401 Response Interceptor — Clears auth state and resets the store
+ * so the user is redirected to the auth/login screen.
+ *
+ * The auth store reset is lazily imported to avoid circular dependencies.
+ */
 api.interceptors.response.use(
   (response) => response,
-  (error: AxiosError) => {
+  async (error: AxiosError) => {
     if (error.response?.status === 401) {
-      SecureStore.deleteItemAsync(TOKEN_KEY);
-      SecureStore.deleteItemAsync(USER_KEY);
+      console.log('[API] 401 received — clearing auth state');
+      await SecureStore.deleteItemAsync(TOKEN_KEY);
+      await SecureStore.deleteItemAsync(USER_KEY);
+
+      // Reset the auth store so RootNavigator re-renders to Auth/Onboarding
+      try {
+        const { useAuthStore } = require('../store/authStore');
+        useAuthStore.getState().reset();
+      } catch {
+        // Store may not be initialized yet during boot
+      }
     }
     return Promise.reject(error);
   },

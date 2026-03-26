@@ -8,12 +8,15 @@ import {
   Post,
   Request,
   UseGuards,
+  ValidationPipe,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { SessionsService } from './sessions.service';
+import { InterviewAIService } from './interview-ai.service';
 import { StartSessionDto } from './dto/start-session.dto';
 import { SubmitInterviewDto } from './dto/submit-interview.dto';
 import { SaveDraftInterviewDto } from './dto/save-draft-interview.dto';
+import { NextQuestionDto } from './dto/next-question.dto';
 import { UpdateStatusDto } from './dto/update-status.dto';
 import { SetUnpackingChoiceDto } from './dto/set-unpacking-choice.dto';
 import { SubmitUnpackingFeedbackDto } from './dto/submit-unpacking-feedback.dto';
@@ -21,7 +24,10 @@ import { SubmitUnpackingFeedbackDto } from './dto/submit-unpacking-feedback.dto'
 @UseGuards(JwtAuthGuard)
 @Controller('sessions')
 export class SessionsController {
-  constructor(private sessionsService: SessionsService) {}
+  constructor(
+    private sessionsService: SessionsService,
+    private interviewAI: InterviewAIService,
+  ) {}
 
   @Post()
   startSession(@Request() req, @Body() dto: StartSessionDto) {
@@ -50,6 +56,33 @@ export class SessionsController {
       dto,
     );
     return result.interview;
+  }
+
+  @Post(':id/interview/next-question')
+  async getNextQuestion(
+    @Request() req,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body(ValidationPipe) dto: NextQuestionDto,
+  ) {
+    const session = await this.sessionsService.getSession(id, req.user.id);
+    const userGender: string | null = req.user.gender ?? null;
+
+    // If user is Partner B and session has extraction data, use context-aware generation
+    const isPartnerB = session.initiatedBy !== req.user.id;
+    const extraction = session.partnerAExtraction as { issues?: string[]; needs?: string[]; emotions?: string[] } | null;
+
+    let question: string;
+    if (isPartnerB && extraction?.issues && extraction.issues.length > 0) {
+      question = await this.interviewAI.generateNextQuestionWithContext(
+        dto.conversationHistory,
+        { issues: extraction.issues, needs: extraction.needs || [], emotions: extraction.emotions || [] },
+        userGender,
+      );
+    } else {
+      question = await this.interviewAI.generateNextQuestion(dto.conversationHistory, userGender);
+    }
+
+    return { question };
   }
 
   @Patch(':id/interview/draft')
@@ -109,6 +142,16 @@ export class SessionsController {
     @Body() dto: SubmitUnpackingFeedbackDto,
   ) {
     return this.sessionsService.submitUnpackingFeedback(id, req.user.id, dto);
+  }
+
+  @Get(':id/partner-b-context')
+  getPartnerBContext(@Request() req, @Param('id', ParseUUIDPipe) id: string) {
+    return this.sessionsService.getPartnerBContext(id, req.user.id);
+  }
+
+  @Post(':id/snooze')
+  snoozePartnerBInvite(@Request() req, @Param('id', ParseUUIDPipe) id: string) {
+    return this.sessionsService.snoozePartnerBInvite(id, req.user.id);
   }
 
   @Post(':id/remind-partner')

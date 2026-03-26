@@ -15,7 +15,7 @@
  * Only the visual styling has been updated for the warm-light theme.
  */
 
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import {
   View,
   TextInput,
@@ -23,52 +23,98 @@ import {
   StyleSheet,
   Pressable,
   Text,
-  ScrollView,
+  Keyboard,
   KeyboardAvoidingView,
   Platform,
 } from 'react-native';
+import Animated, {
+  useSharedValue,
+  useAnimatedStyle,
+  withTiming,
+  withDelay,
+  withSpring,
+  FadeInDown,
+} from 'react-native-reanimated';
 import { Lock, ArrowLeft, Mic } from 'lucide-react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
-import { Button } from '../../components/ui/Button';
-import { Badge } from '../../components/ui/Badge';
 import { ChatBubble } from '../../components/domain/ChatBubble';
 import { TypingIndicator } from '../../components/domain/TypingIndicator';
 import { VoiceRecorderButton } from '../../components/domain/VoiceRecorderButton';
 import { LoadingScreen } from '../../components/feedback/LoadingScreen';
-import { colors, typography, fontFamilies, spacing, radius, shadows } from '../../theme';
+import { colors, fontFamilies, spacing, radius, shadows } from '../../theme';
 import { useInterview } from '../../hooks/useInterview';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder';
+import { useAuthStore } from '../../store/authStore';
+import { getGenderCopy } from '../../utils/genderCopy';
 import { lightTap } from '../../utils/haptics';
 import { formatTime } from '../../utils/format';
 
 interface InterviewScreenProps {
   sessionId: string;
+  partnerBOpeningMessage?: string;
   onExit: () => void;
   onComplete: () => void;
 }
 
-const FEELINGS = ['Hurt', 'Dismissed', 'Scared', 'Angry', 'Confused', 'Other'];
-
 export function InterviewScreen({
   sessionId,
+  partnerBOpeningMessage,
   onExit,
   onComplete,
 }: InterviewScreenProps) {
+  const user = useAuthStore((s) => s.user);
+  const copy = getGenderCopy(user?.gender, user?.name);
   const {
     messages,
     isLoading,
     isTranscribing,
+    isThinking,
     isComplete,
     sendTextResponse,
     sendVoiceResponse,
     exitAndSaveDraft,
-  } = useInterview(sessionId);
+  } = useInterview(sessionId, partnerBOpeningMessage, user?.gender, user?.name);
   const { isRecording, startRecording, stopRecording, resetRecording } =
     useAudioRecorder();
   const [inputText, setInputText] = useState('');
   const [showVoice, setShowVoice] = useState(false);
-  const [selectedFeelings, setSelectedFeelings] = useState<string[]>([]);
   const flatListRef = useRef<FlatList>(null);
+
+  // ── Safe badge entry animation ──
+  const safeBadgeOpacity = useSharedValue(0);
+  const lockRotation = useSharedValue(-10);
+
+  useEffect(() => {
+    safeBadgeOpacity.value = withDelay(300, withTiming(1, { duration: 500 }));
+    lockRotation.value = withDelay(200, withSpring(0, { damping: 12, stiffness: 100 }));
+  }, []);
+
+  const safeBadgeAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: safeBadgeOpacity.value,
+    transform: [{ rotate: `${lockRotation.value}deg` }],
+  }));
+
+  // ── Send button fade animation ──
+  const sendOpacity = useSharedValue(0);
+
+  useEffect(() => {
+    sendOpacity.value = withTiming(inputText.trim().length > 0 ? 1 : 0, { duration: 200 });
+  }, [inputText]);
+
+  const sendAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: sendOpacity.value,
+  }));
+
+  // ── Scroll to end when keyboard opens ──
+  useEffect(() => {
+    const showSub = Keyboard.addListener(
+      Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow',
+      () => {
+        setTimeout(() => flatListRef.current?.scrollToEnd({ animated: true }), 100);
+      }
+    );
+    return () => showSub.remove();
+  }, []);
 
   React.useEffect(() => {
     if (isComplete) onComplete();
@@ -96,23 +142,9 @@ export function InterviewScreen({
     onExit();
   }, [exitAndSaveDraft, onExit]);
 
-  const toggleFeeling = useCallback((feeling: string) => {
-    setSelectedFeelings((prev) =>
-      prev.includes(feeling)
-        ? prev.filter((f) => f !== feeling)
-        : prev.length < 3
-          ? [...prev, feeling]
-          : prev,
-    );
-  }, []);
-
   if (isLoading) {
-    return <LoadingScreen message="Preparing your safe space..." />;
+    return <LoadingScreen message={copy.loadingMessage} />;
   }
-
-  // Show feelings after 2+ user messages
-  const userMessages = messages.filter((m) => m.role === 'user');
-  const showFeelingCheck = userMessages.length >= 2;
 
   return (
     <SafeArea edges={['top']}>
@@ -127,23 +159,26 @@ export function InterviewScreen({
             <ArrowLeft color={colors.textSecondary} size={22} />
           </Pressable>
           <Text style={styles.stepIndicator}>Step 1 of 3</Text>
-          <View style={styles.safeBadge}>
+          <Animated.View style={[styles.safeBadge, safeBadgeAnimatedStyle]}>
             <Lock color={colors.success} size={12} />
             <Text style={styles.safeBadgeText}>Only you can see this</Text>
-          </View>
+          </Animated.View>
         </View>
 
         {/* ── Prompt header (shown when no messages yet) ── */}
         {messages.length <= 1 && (
-          <View style={styles.promptSection}>
+          <Animated.View
+            style={styles.promptSection}
+            entering={FadeInDown.duration(600).delay(400)}
+          >
             <Text style={styles.promptTitle}>
-              What happened?
+              {copy.promptTitle}
             </Text>
             <Text style={styles.promptSub}>
-              <Text style={styles.promptItalic}>Take your time.</Text>
-              {'\n'}There's no wrong answer.
+              <Text style={styles.promptItalic}>{copy.promptItalic}</Text>
+              {'\n'}{copy.promptSub}
             </Text>
-          </View>
+          </Animated.View>
         )}
 
         {/* ── Chat history ── */}
@@ -152,46 +187,22 @@ export function InterviewScreen({
           data={messages}
           keyExtractor={(item) => item.id}
           contentContainerStyle={styles.chatList}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
           onContentSizeChange={() =>
             flatListRef.current?.scrollToEnd({ animated: true })
           }
-          renderItem={({ item }) => (
+          renderItem={({ item, index }) => (
             <ChatBubble
               message={item.text}
               isUser={item.role === 'user'}
               role={item.role === 'user' ? 'user' : 'ai'}
               timestamp={item.timestamp ? formatTime(item.timestamp) : undefined}
+              index={index}
             />
           )}
-          ListFooterComponent={isTranscribing ? <TypingIndicator /> : null}
+          ListFooterComponent={isTranscribing || isThinking ? <TypingIndicator /> : null}
         />
-
-        {/* ── Feeling pills ── */}
-        {showFeelingCheck && (
-          <View style={styles.feelingSection}>
-            <Text style={styles.feelingLabel}>HOW DOES THIS MAKE YOU FEEL?</Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.feelingRow}
-            >
-              {FEELINGS.map((feeling) => {
-                const selected = selectedFeelings.includes(feeling);
-                return (
-                  <Pressable
-                    key={feeling}
-                    onPress={() => toggleFeeling(feeling)}
-                    style={[styles.feelingPill, selected && styles.feelingPillActive]}
-                  >
-                    <Text style={[styles.feelingText, selected && styles.feelingTextActive]}>
-                      {feeling}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
-          </View>
-        )}
 
         {/* ── Input area ── */}
         {!isComplete && (
@@ -215,10 +226,16 @@ export function InterviewScreen({
                     style={styles.textInput}
                     value={inputText}
                     onChangeText={setInputText}
-                    placeholder="Start wherever feels right..."
+                    placeholder={copy.inputPlaceholder}
                     placeholderTextColor={colors.textMuted}
                     multiline
                     maxLength={2000}
+                    editable={!isThinking}
+                    blurOnSubmit
+                    onSubmitEditing={() => {
+                      if (inputText.trim()) handleSendText();
+                    }}
+                    returnKeyType="send"
                   />
                 </View>
                 {/* Voice button */}
@@ -228,15 +245,18 @@ export function InterviewScreen({
                 >
                   <Mic color={colors.textInverse} size={20} />
                 </Pressable>
-                {/* Send button (shown when there is text) */}
-                {inputText.trim().length > 0 && (
+                {/* Send button (fades in/out based on input text) */}
+                <Animated.View
+                  style={sendAnimatedStyle}
+                  pointerEvents={inputText.trim().length > 0 ? 'auto' : 'none'}
+                >
                   <Pressable
                     onPress={handleSendText}
                     style={styles.sendBtn}
                   >
                     <Text style={styles.sendText}>Send</Text>
                   </Pressable>
-                )}
+                </Animated.View>
               </View>
             )}
           </View>
@@ -316,50 +336,11 @@ const styles = StyleSheet.create({
     paddingBottom: 12,
   },
 
-  // ── Feeling pills ──
-  feelingSection: {
-    paddingHorizontal: spacing.lg,
-    paddingVertical: 14,
-    borderTopWidth: 1,
-    borderTopColor: colors.border,
-    backgroundColor: colors.bgPrimary,
-  },
-  feelingLabel: {
-    ...typography.label,
-    color: colors.textMuted,
-    marginBottom: 10,
-  },
-  feelingRow: {
-    gap: 8,
-    flexDirection: 'row',
-  },
-  feelingPill: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: radius.pill,
-    backgroundColor: colors.bgElevated,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  feelingPillActive: {
-    backgroundColor: colors.orangeTint,
-    borderColor: colors.orangeMid,
-  },
-  feelingText: {
-    fontFamily: fontFamilies.body,
-    fontSize: 14,
-    color: colors.textSecondary,
-  },
-  feelingTextActive: {
-    color: colors.orangeDeep,
-    fontFamily: fontFamilies.bodyBold,
-  },
-
   // ── Input bar ──
   inputBar: {
     paddingHorizontal: spacing.lg,
     paddingVertical: 12,
-    paddingBottom: 28,
+    paddingBottom: 20,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.bgElevated,

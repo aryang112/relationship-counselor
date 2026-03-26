@@ -78,6 +78,11 @@ export function PromiseScreen({ onContinue }: PromiseScreenProps) {
             Not one side. Not the loudest voice.{'\n'}
             Both of you, completely.
           </Text>
+
+          <Text style={styles.disclaimerText}>
+            Relate is an AI mediation tool, not a licensed therapist or mental
+            health service.
+          </Text>
         </Animated.View>
 
         {/* Continue button */}
@@ -136,6 +141,14 @@ const styles = StyleSheet.create({
     color: colors.textSecondary,
     textAlign: 'center',
     marginTop: spacing.lg,
+  },
+  disclaimerText: {
+    fontFamily: fontFamilies.body,
+    fontSize: 13,
+    lineHeight: 18,
+    color: colors.textMuted,
+    textAlign: 'center',
+    marginTop: spacing.xl,
   },
   actions: {
     paddingBottom: spacing.xl,

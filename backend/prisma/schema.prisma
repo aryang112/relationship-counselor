@@ -25,13 +25,21 @@ model User {
   tosVersionAgreed      String?   @map("tos_version_agreed") @db.VarChar(10)
   privacyVersionAgreed  String?   @map("privacy_version_agreed") @db.VarChar(10)
   consentAgreedAt       DateTime? @map("consent_agreed_at")
+  aiConsentAgreedAt     DateTime? @map("ai_consent_agreed_at")
   dateOfBirthConfirmed  Boolean   @default(false) @map("date_of_birth_confirmed")
   isMinorFlagged        Boolean   @default(false) @map("is_minor_flagged")
 
-  couplesAsUserA Couple[]      @relation("UserACouples")
-  couplesAsUserB Couple[]      @relation("UserBCouples")
-  interviews     Interview[]
-  consentLogs    ConsentLog[]
+  // Push notifications
+  pushToken             String?   @map("push_token")
+
+  // Soft delete
+  deletedAt             DateTime? @map("deleted_at")
+
+  couplesAsUserA        Couple[]               @relation("UserACouples")
+  couplesAsUserB        Couple[]               @relation("UserBCouples")
+  interviews            Interview[]
+  consentLogs           ConsentLog[]
+  reconnectionMessages  ReconnectionMessage[]
 
   @@map("users")
 }
@@ -69,13 +77,19 @@ model Session {
   unpackingAutoUnlockAt DateTime? @map("unpacking_auto_unlock_at")
   unpackingWaitUserA   Boolean  @default(false) @map("unpacking_wait_user_a")
   unpackingWaitUserB   Boolean  @default(false) @map("unpacking_wait_user_b")
+  topicTag              String?   @map("topic_tag") @db.VarChar(50)
+  topicTagGeneratedAt   DateTime? @map("topic_tag_generated_at")
+  partnerBSnoozedUntil  DateTime? @map("partner_b_snoozed_until")
+  partnerAExtraction    Json?     @map("partner_a_extraction")
   manualReminderSentAt DateTime? @map("manual_reminder_sent_at")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
-  couple      Couple   @relation(fields: [coupleId], references: [id])
-  interviews  Interview[]
-  unpacking   Unpacking?
+  couple               Couple                @relation(fields: [coupleId], references: [id])
+  interviews           Interview[]
+  unpacking            Unpacking?
+  reconnectionMessages ReconnectionMessage[]
+  commitment           Commitment?
 
   @@index([coupleId])
   @@index([coupleId, status])
@@ -136,4 +150,35 @@ model ConsentLog {
 
   @@index([userId])
   @@map("consent_log")
+}
+
+// Reconnection chat messages — async turn-based conversation between partners with AI mediation
+model ReconnectionMessage {
+  id        String   @id @default(uuid())
+  sessionId String   @map("session_id")
+  session   Session  @relation(fields: [sessionId], references: [id])
+  userId    String?  @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id])
+  role      String   // 'user_a', 'user_b', 'ai'
+  text      String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  @@index([sessionId, createdAt])
+  @@map("reconnection_messages")
+}
+
+// Shared commitment/learning generated at the end of a reconnection conversation
+model Commitment {
+  id             String    @id @default(uuid())
+  sessionId      String    @unique @map("session_id")
+  session        Session   @relation(fields: [sessionId], references: [id])
+  text           String
+  userAAgreed    Boolean   @default(false) @map("user_a_agreed")
+  userBAgreed    Boolean   @default(false) @map("user_b_agreed")
+  userAAgreedAt  DateTime? @map("user_a_agreed_at")
+  userBAgreedAt  DateTime? @map("user_b_agreed_at")
+  createdAt      DateTime  @default(now()) @map("created_at")
+  updatedAt      DateTime  @updatedAt @map("updated_at")
+
+  @@map("commitments")
 }

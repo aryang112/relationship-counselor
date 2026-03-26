@@ -7,12 +7,15 @@ import {
   HttpStatus,
   NotFoundException,
 } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { Prisma } from '@prisma/client';
+import OpenAI from 'openai';
 import { PrismaService } from '../../prisma.service';
 import { CouplesService } from '../couples/couples.service';
 import { UnpackingQueueService } from '../unpacking/unpacking-queue.service';
 import { NotificationsService, NotificationPayload } from '../notifications/notifications.service';
 import { NotificationsQueueService } from '../notifications/notifications-queue.service';
+import { InterviewAIService } from './interview-ai.service';
 import { StartSessionDto } from './dto/start-session.dto';
 import { SubmitInterviewDto } from './dto/submit-interview.dto';
 import { SaveDraftInterviewDto } from './dto/save-draft-interview.dto';
@@ -21,8 +24,9 @@ import { SubmitUnpackingFeedbackDto } from './dto/submit-unpacking-feedback.dto'
 
 const FINAL_SESSION_STATUSES = ['resolved', 'abandoned'];
 const ALLOWED_TRANSITIONS: Record<string, string[]> = {
-  initiated: ['in_progress', 'abandoned'],
-  in_progress: ['unpacking_ready', 'abandoned'],
+  initiated: ['in_progress', 'awaiting_partner_b', 'abandoned'],
+  in_progress: ['awaiting_partner_b', 'unpacking_ready', 'abandoned'],
+  awaiting_partner_b: ['in_progress', 'unpacking_ready', 'abandoned'],
   unpacking_ready: ['reconnection', 'abandoned'],
   reconnection: ['resolved', 'abandoned'],
   resolved: [],
@@ -37,6 +41,8 @@ export class SessionsService {
     private unpackingQueue: UnpackingQueueService,
     private notificationsService: NotificationsService,
     private notificationsQueue: NotificationsQueueService,
+    private interviewAI: InterviewAIService,
+    private configService: ConfigService,
   ) {}
 
   async startSession(userId: string, dto: StartSessionDto) {
@@ -102,11 +108,14 @@ export class SessionsService {
       select: { name: true },
     });
     if (partnerId && initiator) {
+      const partnerInfo = await this.getUserNotificationInfo(partnerId);
       await this.notificationsService.send({
         userId: partnerId,
         type: 'session_initiated',
         title: `${initiator.name} wants to work through something with you 💙`,
         body: 'Tap to participate',
+        pushToken: partnerInfo.pushToken ?? undefined,
+        email: partnerInfo.email ?? undefined,
         channels: ['push', 'email'],
         data: { sessionId: session.id },
       });
@@ -155,7 +164,7 @@ export class SessionsService {
       throw new ConflictException('Cannot save draft - interview already completed.');
     }
 
-    return this.prisma.interview.upsert({
+    const result = await this.prisma.interview.upsert({
       where: {
         sessionId_userId: { sessionId, userId },
       },
@@ -172,6 +181,27 @@ export class SessionsService {
         // Keep completedAt: null (still a draft)
       },
     });
+
+    // If this is a NEW interview (not updating existing), notify Partner A that B started
+    if (!existingInterview) {
+      try {
+        const session = await this.prisma.session.findUnique({
+          where: { id: sessionId },
+          include: { couple: true },
+        });
+        if (session && session.status === 'awaiting_partner_b') {
+          const initiatorId = session.initiatedBy;
+          const partner = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+          if (initiatorId !== userId && partner) {
+            await this.notifyPartnerAStarted(initiatorId, partner.name, sessionId);
+          }
+        }
+      } catch {
+        // Silent fail for notification
+      }
+    }
+
+    return result;
   }
 
   async getInterview(sessionId: string, userId: string) {
@@ -263,6 +293,31 @@ export class SessionsService {
       });
     }
 
+    if (nextStatus === 'awaiting_partner_b') {
+      // Extract context from Partner A's responses
+      try {
+        const extraction = await this.interviewAI.extractPartnerAContext(dto.responses);
+        await this.prisma.session.update({
+          where: { id: session.id },
+          data: {
+            topicTag: extraction.topicTag,
+            topicTagGeneratedAt: new Date(),
+            partnerAExtraction: extraction as any,
+          },
+        });
+        // Notify Partner B
+        const partnerId = session.couple.userAId === userId ? session.couple.userBId : session.couple.userAId;
+        const initiator = await this.prisma.user.findUnique({ where: { id: userId }, select: { name: true } });
+        if (partnerId && initiator) {
+          await this.notifyPartnerBInvite(partnerId, initiator.name, session.id, extraction.topicTag);
+          await this.schedulePartnerBReminders(partnerId, initiator.name, session.id, extraction.topicTag);
+        }
+      } catch (err) {
+        // Log but don't fail the submission
+        console.error('Failed to extract Partner A context:', err);
+      }
+    }
+
     if (nextStatus === 'unpacking_ready') {
       await this.ensureUnpackingExists(latestSession);
       await this.enqueueUnpackingJob(latestSession);
@@ -348,11 +403,14 @@ export class SessionsService {
       select: { name: true },
     });
 
+    const partnerInfo = await this.getUserNotificationInfo(partnerId);
     await this.notificationsService.send({
       userId: partnerId,
       type: 'manual_interview_reminder',
       title: `${requester?.name ?? 'Your partner'} is waiting to hear your perspective 💭`,
       body: 'Tap to share your side of the story.',
+      pushToken: partnerInfo.pushToken ?? undefined,
+      email: partnerInfo.email ?? undefined,
       channels: ['push', 'email'],
       data: { sessionId },
     });
@@ -395,7 +453,7 @@ export class SessionsService {
     const session = await this.ensureSessionAccess(sessionId, userId);
 
     // Validate status transitions
-    const validStatuses = ['initiated', 'in_progress', 'unpacking_ready', 'reconnection', 'resolved', 'abandoned'];
+    const validStatuses = ['initiated', 'in_progress', 'awaiting_partner_b', 'unpacking_ready', 'reconnection', 'resolved', 'abandoned'];
     if (!validStatuses.includes(newStatus)) {
       throw new ConflictException(`Invalid status: ${newStatus}`);
     }
@@ -536,11 +594,14 @@ export class SessionsService {
         updateData.unpackingAutoUnlockAt = autoUnlockTime;
 
         // Notify waiting user that partner is ready and they'll auto-unlock in 24h
+        const userInfo = await this.getUserNotificationInfo(userId);
         await this.notificationsService.send({
           userId,
           type: 'partner_viewed_unpacking',
           title: 'Your partner viewed the insights',
           body: "They're waiting for you. This will auto-unlock in 24 hours.",
+          pushToken: userInfo.pushToken ?? undefined,
+          email: userInfo.email ?? undefined,
           channels: ['push'],
           data: { sessionId: session.id, autoUnlockAt: autoUnlockTime.toISOString() },
         });
@@ -573,11 +634,14 @@ export class SessionsService {
         // Notify waiting partner
         const partnerId = isUserA ? session.couple.userBId : session.couple.userAId;
         if (partnerId) {
+          const partnerNotifInfo = await this.getUserNotificationInfo(partnerId);
           await this.notificationsService.send({
             userId: partnerId,
             type: 'partner_viewed_unpacking',
             title: 'Your partner viewed the insights',
             body: "They're waiting for you. This will auto-unlock in 24 hours.",
+            pushToken: partnerNotifInfo.pushToken ?? undefined,
+            email: partnerNotifInfo.email ?? undefined,
             channels: ['push'],
             data: { sessionId: session.id, autoUnlockAt: autoUnlockTime.toISOString() },
           });
@@ -617,11 +681,14 @@ export class SessionsService {
     // Notify the other partner that unpacking was unlocked
     const partnerId = isUserA ? session.couple.userBId : session.couple.userAId;
     if (partnerId) {
+      const partnerInfo = await this.getUserNotificationInfo(partnerId);
       await this.notificationsService.send({
         userId: partnerId,
         type: 'unpacking_unlocked',
         title: 'Your partner is ready to view the insights with you',
         body: 'The unpacking is now available',
+        pushToken: partnerInfo.pushToken ?? undefined,
+        email: partnerInfo.email ?? undefined,
         channels: ['push'],
         data: { sessionId: session.id },
       });
@@ -734,10 +801,25 @@ export class SessionsService {
     }
 
     if (hasUserA || hasUserB) {
+      // If the initiator completed their interview but partner hasn't yet
+      const initiatorCompleted = completedInterviews.some(
+        (interview) => interview.userId === session.initiatedBy,
+      );
+      if (initiatorCompleted) {
+        return 'awaiting_partner_b';
+      }
       return 'in_progress';
     }
 
     return session.status;
+  }
+
+  private async getUserNotificationInfo(userId: string): Promise<{ pushToken: string | null; email: string | null }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { pushToken: true, email: true },
+    });
+    return { pushToken: user?.pushToken || null, email: user?.email || null };
   }
 
   private async ensureSessionAccess(sessionId: string, userId: string) {
@@ -807,7 +889,7 @@ export class SessionsService {
       return;
     }
 
-    await this.unpackingQueue.enqueueGenerateUnpacking({
+    const result = await this.unpackingQueue.enqueueGenerateUnpacking({
       sessionId: session.id,
       coupleId: session.coupleId,
       partnerAInterviewId: completedA.id,
@@ -815,6 +897,130 @@ export class SessionsService {
       partnerAResponses: completedA.responses,
       partnerBResponses: completedB.responses,
     });
+
+    if (!result.enqueued) {
+      // No Redis/worker available — generate unpacking inline (fire-and-forget)
+      this.generateUnpackingInline(session.id).catch(() => {});
+    }
+  }
+
+  /**
+   * Generates unpacking content inline using OpenAI when Redis/BullMQ
+   * worker is unavailable. Uses the same prompt structure as the worker's
+   * OpenAIService.generateUnpacking() to produce identical output.
+   */
+  private async generateUnpackingInline(sessionId: string): Promise<void> {
+    try {
+      const session = await this.prisma.session.findUnique({
+        where: { id: sessionId },
+        include: {
+          interviews: { include: { user: true } },
+          couple: { include: { userA: true, userB: true } },
+        },
+      });
+      if (!session) return;
+
+      const interviews = session.interviews.filter((i) => i.completedAt);
+      if (interviews.length < 2) return;
+
+      const partnerAInterview = interviews.find(
+        (i) => i.userId === session.couple.userAId,
+      );
+      const partnerBInterview = interviews.find(
+        (i) => i.userId === session.couple.userBId,
+      );
+      if (!partnerAInterview || !partnerBInterview) return;
+
+      const partnerAName = session.couple.userA?.name || 'Partner A';
+      const partnerBName = session.couple.userB?.name || 'Partner B';
+
+      const partnerAResponses = (partnerAInterview.responses as any) || [];
+      const partnerBResponses = (partnerBInterview.responses as any) || [];
+
+      // Use the same prompt as workers/src/services/openai.service.ts
+      const systemPrompt = `You are a neutral, emotionally safe mediator for romantic partners.
+Tone: slow, warm, grounded, gentle, deeply validating. Use soft, simple sentences and short lines.
+Always create safety, validate both partners, slow the moment down, and make the situation feel workable.
+Focus on needs, vulnerability, and misunderstandings; guide them toward feeling on the same team.
+Never blame, escalate, pressure, diagnose, moralize, or suggest breaking up.
+Goal: emotional safety → clarity → understanding → reconnection.
+
+Return ONLY JSON with keys: summary, sharedTruths, positiveIntents, patterns, recommendations.
+- summary: a short neutral recount of the conflict (1–2 sentences, gentle tone)
+- sharedTruths: array of validating statements both might agree with
+- positiveIntents: { partnerA: string, partnerB: string } reframing each partner generously
+- patterns: array of gentle observations about dynamics
+- recommendations: array of short, calming next steps (no blame, no ultimatums).`;
+
+      const userPrompt = `Partner A (${partnerAName})'s perspective:
+${JSON.stringify(partnerAResponses, null, 2)}
+
+Partner B (${partnerBName})'s perspective:
+${JSON.stringify(partnerBResponses, null, 2)}
+
+Please analyze this conflict and provide your response in this exact JSON format:
+{
+  "summary": "A single string summarizing the conflict from both perspectives",
+  "sharedTruths": ["array", "of", "strings"],
+  "positiveIntents": {
+    "partnerA": "positive reframing of Partner A's behavior as a string",
+    "partnerB": "positive reframing of Partner B's behavior as a string"
+  },
+  "patterns": ["array", "of", "pattern", "strings"],
+  "recommendations": ["array", "of", "recommendation", "strings"]
+}`;
+
+      const client = new OpenAI({
+        apiKey: this.configService.get('OPENAI_API_KEY'),
+      });
+      const model = this.configService.get('OPENAI_MODEL') || 'gpt-4o-mini';
+
+      const response = await client.chat.completions.create({
+        model,
+        messages: [
+          { role: 'system', content: systemPrompt },
+          { role: 'user', content: userPrompt },
+        ],
+        temperature: 0.8,
+        max_tokens: 1500,
+        response_format: { type: 'json_object' },
+      });
+
+      const content = response.choices[0].message.content || '{}';
+      const parsed = JSON.parse(content);
+
+      // Helper matching the worker's toText conversion
+      const toText = (value: any) =>
+        Array.isArray(value) ? value.join('\n') : value || '';
+
+      // Upsert with real content (mirrors unpacking.processor.ts upsert)
+      await this.prisma.unpacking.upsert({
+        where: { sessionId },
+        create: {
+          sessionId,
+          surfaceConflict: parsed.summary ?? 'Pending unpacking',
+          partnerAExperience: parsed.positiveIntents?.partnerA ?? '',
+          partnerBExperience: parsed.positiveIntents?.partnerB ?? '',
+          sharedTruths: parsed.sharedTruths ?? [],
+          deeperInsight: toText(parsed.recommendations),
+          patternRecognition: toText(parsed.patterns),
+          tone: 'supportive',
+        },
+        update: {
+          surfaceConflict: parsed.summary ?? 'Pending unpacking',
+          partnerAExperience: parsed.positiveIntents?.partnerA ?? '',
+          partnerBExperience: parsed.positiveIntents?.partnerB ?? '',
+          sharedTruths: parsed.sharedTruths ?? [],
+          deeperInsight: toText(parsed.recommendations),
+          patternRecognition: toText(parsed.patterns),
+          tone: 'supportive',
+        },
+      });
+
+      console.log(`[UNPACKING] Inline generation complete for session ${sessionId}`);
+    } catch (err) {
+      console.error(`[UNPACKING] Inline generation failed for session ${sessionId}:`, err);
+    }
   }
 
   private async notifyUnpackingReady(session) {
@@ -823,12 +1029,19 @@ export class SessionsService {
       return;
     }
 
+    const [userAInfo, userBInfo] = await Promise.all([
+      this.getUserNotificationInfo(couple.userAId),
+      this.getUserNotificationInfo(couple.userBId),
+    ]);
+
     await Promise.all([
       this.notificationsService.send({
         userId: couple.userAId,
         type: 'unpacking_ready',
         title: 'Your unpacking is ready! 💙',
         body: 'See insights together',
+        pushToken: userAInfo.pushToken ?? undefined,
+        email: userAInfo.email ?? undefined,
         channels: ['push', 'email'],
         data: { sessionId: session.id },
       }),
@@ -837,6 +1050,8 @@ export class SessionsService {
         type: 'unpacking_ready',
         title: 'Your unpacking is ready! 💙',
         body: 'See insights together',
+        pushToken: userBInfo.pushToken ?? undefined,
+        email: userBInfo.email ?? undefined,
         channels: ['push', 'email'],
         data: { sessionId: session.id },
       }),
@@ -853,15 +1068,22 @@ export class SessionsService {
     const hasQueue =
       this.notificationsQueue && (this.notificationsQueue as any)['enabled'] !== false;
 
+    const [userAInfo, userBInfo] = await Promise.all([
+      this.getUserNotificationInfo(couple.userAId),
+      this.getUserNotificationInfo(couple.userBId),
+    ]);
+
     const checkinA: NotificationPayload = {
       userId: couple.userAId,
       type: 'post_resolution_checkin',
       title: 'How have things been since your last mediation?',
-      body: 'Let us know how you’re feeling after resolving your session.',
+      body: "Let us know how you're feeling after resolving your session.",
+      pushToken: userAInfo.pushToken ?? undefined,
+      email: userAInfo.email ?? undefined,
       channels: ['push'],
       data: { sessionId: session.id },
     };
-    const checkinB: NotificationPayload = { ...checkinA, userId: couple.userBId };
+    const checkinB: NotificationPayload = { ...checkinA, userId: couple.userBId, pushToken: userBInfo.pushToken ?? undefined, email: userBInfo.email ?? undefined };
 
     const delayMs = 3 * 24 * 60 * 60 * 1000; // 3 days
 
@@ -876,11 +1098,14 @@ export class SessionsService {
 
   // Hook to remind partner if no interview within 24h/48h (stub; schedule via cron/worker in future)
   async sendInterviewReminder(userId: string, partnerName: string, hours: number, sessionId: string) {
+    const userInfo = await this.getUserNotificationInfo(userId);
     await this.notificationsService.send({
       userId,
       type: 'interview_reminder',
       title: `${partnerName} is waiting to hear your perspective 💭`,
       body: `It's been ${hours} hours since the session was started.`,
+      pushToken: userInfo.pushToken ?? undefined,
+      email: userInfo.email ?? undefined,
       channels: ['push', 'email'],
       data: { sessionId },
     });
@@ -891,11 +1116,15 @@ export class SessionsService {
     const hasQueue =
       this.notificationsQueue && (this.notificationsQueue as any)['enabled'] !== false;
 
+    const partnerInfo = await this.getUserNotificationInfo(partnerId);
+
     const reminder24: NotificationPayload = {
       userId: partnerId,
       type: 'interview_reminder_24h',
       title: `${initiatorName} is waiting to hear your perspective 💭`,
       body: "It's been 24 hours since the session was started.",
+      pushToken: partnerInfo.pushToken ?? undefined,
+      email: partnerInfo.email ?? undefined,
       channels: ['push', 'email'],
       data: { sessionId },
     };
@@ -905,6 +1134,8 @@ export class SessionsService {
       type: 'interview_reminder_48h',
       title: 'Last reminder - mediation session waiting for you',
       body: 'It has been 48 hours. You can respond now or request more time.',
+      pushToken: partnerInfo.pushToken ?? undefined,
+      email: partnerInfo.email ?? undefined,
       channels: ['push', 'email'],
       data: { sessionId },
     };
@@ -916,5 +1147,162 @@ export class SessionsService {
       await this.notificationsService.send(reminder24);
       await this.notificationsService.send(reminder48);
     }
+  }
+
+  private async notifyPartnerBInvite(partnerId: string, initiatorName: string, sessionId: string, topicTag: string) {
+    const partnerInfo = await this.getUserNotificationInfo(partnerId);
+    await this.notificationsService.send({
+      userId: partnerId,
+      type: 'partner_b_invite',
+      title: `${initiatorName} asked me to reach out to you.`,
+      body: `Topic: ${topicTag} — I'd love to hear your side.`,
+      pushToken: partnerInfo.pushToken ?? undefined,
+      email: partnerInfo.email ?? undefined,
+      channels: ['push', 'email'],
+      data: { sessionId, topicTag },
+    });
+  }
+
+  private async schedulePartnerBReminders(partnerId: string, initiatorName: string, sessionId: string, topicTag: string) {
+    const immediate = process.env.NOTIFICATIONS_SEND_REMINDERS_IMMEDIATELY === 'true';
+    const hasQueue = this.notificationsQueue && (this.notificationsQueue as any)['enabled'] !== false;
+
+    const partnerInfo = await this.getUserNotificationInfo(partnerId);
+
+    const reminder4h: NotificationPayload = {
+      userId: partnerId,
+      type: 'partner_b_reminder_4h',
+      title: `${initiatorName} is waiting to hear your perspective`,
+      body: `Topic: ${topicTag} — Your side of the story matters.`,
+      pushToken: partnerInfo.pushToken ?? undefined,
+      email: partnerInfo.email ?? undefined,
+      channels: ['push'],
+      data: { sessionId, topicTag },
+    };
+
+    const reminder24h: NotificationPayload = {
+      userId: partnerId,
+      type: 'partner_b_reminder_24h',
+      title: `${initiatorName} shared something important`,
+      body: `Topic: ${topicTag} — Sharing your perspective helps you both.`,
+      pushToken: partnerInfo.pushToken ?? undefined,
+      email: partnerInfo.email ?? undefined,
+      channels: ['push', 'email'],
+      data: { sessionId, topicTag },
+    };
+
+    const reminder72h: NotificationPayload = {
+      userId: partnerId,
+      type: 'partner_b_reminder_72h',
+      title: 'Last reminder — mediation session waiting for you',
+      body: `${initiatorName} shared their side 3 days ago. Your perspective matters too.`,
+      pushToken: partnerInfo.pushToken ?? undefined,
+      email: partnerInfo.email ?? undefined,
+      channels: ['push', 'email'],
+      data: { sessionId, topicTag },
+    };
+
+    if (hasQueue) {
+      await this.notificationsQueue.enqueue(reminder4h, 4 * 60 * 60 * 1000);
+      await this.notificationsQueue.enqueue(reminder24h, 24 * 60 * 60 * 1000);
+      await this.notificationsQueue.enqueue(reminder72h, 72 * 60 * 60 * 1000);
+    } else if (immediate) {
+      await this.notificationsService.send(reminder4h);
+      await this.notificationsService.send(reminder24h);
+      await this.notificationsService.send(reminder72h);
+    }
+  }
+
+  private async notifyPartnerAStarted(initiatorId: string, partnerName: string, sessionId: string) {
+    const initiatorInfo = await this.getUserNotificationInfo(initiatorId);
+    await this.notificationsService.send({
+      userId: initiatorId,
+      type: 'partner_b_started',
+      title: `${partnerName} just started sharing their side`,
+      body: 'The mediation process is moving forward.',
+      pushToken: initiatorInfo.pushToken ?? undefined,
+      email: initiatorInfo.email ?? undefined,
+      channels: ['push'],
+      data: { sessionId },
+    });
+  }
+
+  async getPartnerBContext(sessionId: string, userId: string) {
+    const session = await this.ensureSessionAccess(sessionId, userId);
+
+    if (session.initiatedBy === userId) {
+      throw new ForbiddenException('Partner A cannot access this endpoint.');
+    }
+
+    const initiator = await this.prisma.user.findUnique({
+      where: { id: session.initiatedBy },
+      select: { name: true },
+    });
+
+    const extraction = session.partnerAExtraction as { topicTag?: string; issues?: string[]; needs?: string[]; emotions?: string[] } | null;
+
+    // Check if Partner B has a draft
+    const existingInterview = await this.prisma.interview.findFirst({
+      where: { sessionId, userId },
+    });
+
+    const firstName = initiator?.name?.split(' ')[0] || 'Your partner';
+
+    return {
+      topicTag: session.topicTag || 'Something on their mind',
+      initiatorName: firstName,
+      openingMessage: `${firstName} shared something they've been thinking about — "${session.topicTag || 'a situation between you'}." I'd love to hear your perspective too. What's been on your mind about this?`,
+      contextForAI: {
+        issues: extraction?.issues || [],
+        needs: extraction?.needs || [],
+        emotions: extraction?.emotions || [],
+      },
+      hasDraft: !!existingInterview && !existingInterview.completedAt,
+    };
+  }
+
+  async snoozePartnerBInvite(sessionId: string, userId: string) {
+    const session = await this.ensureSessionAccess(sessionId, userId);
+
+    if (session.initiatedBy === userId) {
+      throw new ForbiddenException('Only Partner B can snooze the invite.');
+    }
+
+    const snoozedUntil = new Date();
+    snoozedUntil.setHours(snoozedUntil.getHours() + 2);
+
+    await this.prisma.session.update({
+      where: { id: sessionId },
+      data: { partnerBSnoozedUntil: snoozedUntil },
+    });
+
+    // Schedule a reminder after snooze period
+    const initiator = await this.prisma.user.findUnique({
+      where: { id: session.initiatedBy },
+      select: { name: true },
+    });
+
+    const immediate = process.env.NOTIFICATIONS_SEND_REMINDERS_IMMEDIATELY === 'true';
+    const hasQueue = this.notificationsQueue && (this.notificationsQueue as any)['enabled'] !== false;
+
+    const userInfo = await this.getUserNotificationInfo(userId);
+    const reminder: NotificationPayload = {
+      userId,
+      type: 'partner_b_snooze_reminder',
+      title: `Ready to share your perspective?`,
+      body: `${initiator?.name || 'Your partner'} is still waiting to hear your side.`,
+      pushToken: userInfo.pushToken ?? undefined,
+      email: userInfo.email ?? undefined,
+      channels: ['push'],
+      data: { sessionId },
+    };
+
+    if (hasQueue) {
+      await this.notificationsQueue.enqueue(reminder, 2 * 60 * 60 * 1000);
+    } else if (immediate) {
+      await this.notificationsService.send(reminder);
+    }
+
+    return { snoozedUntil: snoozedUntil.toISOString(), message: "We'll remind you in 2 hours." };
   }
 }

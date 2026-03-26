@@ -15,7 +15,7 @@
  * Design System: RelateApp_DesignSpec.md — warm light theme, gradientSoft background.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -23,6 +23,7 @@ import {
   Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
+import * as SecureStore from 'expo-secure-store';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
@@ -31,7 +32,10 @@ import { ArrowLeft } from 'lucide-react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Button } from '../../components/ui/Button';
 import { CrisisResourcesModal } from '../../components/domain/CrisisResourcesModal';
+import { AIConsentModal } from '../../components/domain/AIConsentModal';
 import { useAuthStore } from '../../store/authStore';
+import { recordAiConsent } from '../../services/auth';
+import { getGenderCopy } from '../../utils/genderCopy';
 import { colors, fontFamilies, spacing, radius } from '../../theme';
 import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
 
@@ -45,8 +49,20 @@ export function PreSessionReminderScreen() {
 
   const couple = useAuthStore((s) => s.couple);
   const user = useAuthStore((s) => s.user);
+  const copy = getGenderCopy(user?.gender);
 
   const [crisisModalVisible, setCrisisModalVisible] = useState(false);
+  const [aiConsentVisible, setAiConsentVisible] = useState(false);
+  const [hasAiConsent, setHasAiConsent] = useState<boolean | null>(null);
+
+  /** Check AI consent on mount */
+  useEffect(() => {
+    (async () => {
+      const key = `ai_consent_${user?.id}`;
+      const stored = await SecureStore.getItemAsync(key);
+      setHasAiConsent(stored === 'true');
+    })();
+  }, [user?.id]);
 
   /** Derive partner's first name for the privacy message */
   const isUserA = user?.id === couple?.userAId;
@@ -55,7 +71,32 @@ export function PreSessionReminderScreen() {
 
   /** Navigate to the Interview screen, replacing this screen in the stack */
   const handleProceed = () => {
+    if (hasAiConsent === false) {
+      setAiConsentVisible(true);
+      return;
+    }
     navigation.replace('Interview', { sessionId });
+  };
+
+  /** Called when user agrees to AI consent */
+  const handleAiConsent = async () => {
+    setAiConsentVisible(false);
+    try {
+      await recordAiConsent();
+    } catch {
+      // Best effort — proceed anyway, backend will also check
+    }
+    if (user?.id) {
+      await SecureStore.setItemAsync(`ai_consent_${user.id}`, 'true');
+    }
+    setHasAiConsent(true);
+    navigation.replace('Interview', { sessionId });
+  };
+
+  /** Called when user declines AI consent */
+  const handleAiDecline = () => {
+    setAiConsentVisible(false);
+    navigation.goBack();
   };
 
   return (
@@ -82,7 +123,7 @@ export function PreSessionReminderScreen() {
             style={styles.mainSection}
           >
             {/* Headline */}
-            <Text style={styles.headline}>This is your space.</Text>
+            <Text style={styles.headline}>{copy.preSessionHeadline}</Text>
 
             {/* Body text */}
             <Text style={styles.bodyText}>
@@ -127,6 +168,13 @@ export function PreSessionReminderScreen() {
         <CrisisResourcesModal
           visible={crisisModalVisible}
           onClose={() => setCrisisModalVisible(false)}
+        />
+
+        {/* AI Consent Modal — shown on first session */}
+        <AIConsentModal
+          visible={aiConsentVisible}
+          onAgree={handleAiConsent}
+          onDecline={handleAiDecline}
         />
       </SafeArea>
     </LinearGradient>

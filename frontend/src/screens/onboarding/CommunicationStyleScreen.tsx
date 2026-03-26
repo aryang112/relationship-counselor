@@ -8,7 +8,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
-import Animated, { FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Container } from '../../components/layout/Container';
@@ -17,6 +17,8 @@ import { colors, fontFamilies, typography, spacing, radius } from '../../theme';
 import { useOnboardingStore } from '../../store/onboardingStore';
 import { selectionTap } from '../../utils/haptics';
 
+const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
+
 const COMMUNICATION_OPTIONS = [
   { id: 'withdraw', label: 'I withdraw and go quiet' },
   { id: 'talk', label: 'I need to talk it out immediately' },
@@ -24,6 +26,46 @@ const COMMUNICATION_OPTIONS = [
   { id: 'emotional', label: 'I get emotional and reactive' },
   { id: 'avoid', label: 'I avoid the topic entirely' },
 ];
+
+/** Animated pill with spring scale on press */
+function PillOption({ label, isSelected, onPress, testID }: {
+  label: string;
+  isSelected: boolean;
+  onPress: () => void;
+  testID?: string;
+}) {
+  const scale = useSharedValue(1);
+  const animStyle = useAnimatedStyle(() => ({
+    transform: [{ scale: scale.value }],
+  }));
+
+  const handlePressIn = () => {
+    scale.value = withSpring(0.95, { damping: 15, stiffness: 200 });
+  };
+  const handlePressOut = () => {
+    scale.value = withSpring(1, { damping: 12, stiffness: 180 });
+  };
+
+  return (
+    <AnimatedPressable
+      testID={testID}
+      style={[
+        styles.pill,
+        isSelected && styles.pillSelected,
+        animStyle,
+      ]}
+      onPress={onPress}
+      onPressIn={handlePressIn}
+      onPressOut={handlePressOut}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: isSelected }}
+    >
+      <Text style={[styles.pillText, isSelected && styles.pillTextSelected]}>
+        {label}
+      </Text>
+    </AnimatedPressable>
+  );
+}
 
 interface CommunicationStyleScreenProps {
   onNext: () => void;
@@ -81,25 +123,12 @@ export function CommunicationStyleScreen({
                   key={option.id}
                   entering={FadeInDown.duration(400).delay(300 + index * 80)}
                 >
-                  <Pressable
+                  <PillOption
                     testID={`pill-${option.id}`}
-                    style={[
-                      styles.pill,
-                      isSelected && styles.pillSelected,
-                    ]}
+                    label={option.label}
+                    isSelected={isSelected}
                     onPress={() => toggleOption(option.id)}
-                    accessibilityRole="checkbox"
-                    accessibilityState={{ checked: isSelected }}
-                  >
-                    <Text
-                      style={[
-                        styles.pillText,
-                        isSelected && styles.pillTextSelected,
-                      ]}
-                    >
-                      {option.label}
-                    </Text>
-                  </Pressable>
+                  />
                 </Animated.View>
               );
             })}
@@ -109,14 +138,17 @@ export function CommunicationStyleScreen({
 
       <View style={styles.actions}>
         <View style={styles.actionsInner}>
-          <Button
-            testID="cta-continue"
-            title="Continue"
-            onPress={onNext}
-            disabled={selected.length === 0}
-            size="lg"
-            style={styles.continueBtn}
-          />
+          {selected.length > 0 && (
+            <Animated.View entering={FadeInUp.springify().damping(14).duration(400)}>
+              <Button
+                testID="cta-continue"
+                title="Continue"
+                onPress={onNext}
+                size="lg"
+                style={styles.continueBtn}
+              />
+            </Animated.View>
+          )}
           <Button testID="cta-back" title="Back" onPress={onBack} variant="ghost" size="sm" />
         </View>
       </View>

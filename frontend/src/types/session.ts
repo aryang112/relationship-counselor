@@ -3,6 +3,7 @@ import { type UserSummary } from './user';
 export type SessionStatus =
   | 'initiated'
   | 'in_progress'
+  | 'awaiting_partner_b'
   | 'unpacking_ready'
   | 'reconnection'
   | 'resolved'
@@ -33,6 +34,8 @@ export interface Session {
   unpackingAutoUnlockAt: string | null;
   unpackingWaitUserA: boolean;
   unpackingWaitUserB: boolean;
+  topicTag: string | null;
+  topicTagGeneratedAt: string | null;
   createdAt: string;
   updatedAt: string;
   interviews?: Interview[];

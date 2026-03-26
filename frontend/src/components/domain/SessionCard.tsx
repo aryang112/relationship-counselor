@@ -8,6 +8,11 @@ import { useThemeColors } from '../../theme';
 import { timeAgo } from '../../utils/format';
 import type { Session } from '../../types/session';
 
+/** Capitalize the first letter of a string */
+function capitalizeFirst(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
 interface SessionCardProps {
   session: Session;
   partnerAName: string;
@@ -31,7 +36,7 @@ export function SessionCard({
     <Card style={styles.card} elevated>
       <View style={styles.headerRow}>
         <Text style={[styles.topic, { color: colors.textPrimary }]} numberOfLines={1}>
-          {session.topic || 'Untitled session'}
+          {capitalizeFirst(session.topicTag || session.topic || session.context || 'Open conversation')}
         </Text>
         <StatusBadge status={session.status} />
       </View>

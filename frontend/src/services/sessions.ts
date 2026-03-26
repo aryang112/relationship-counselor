@@ -7,6 +7,7 @@ import type {
 import type {
   SessionStatusResponse,
   RemindPartnerResponse,
+  PartnerBContext,
 } from '../types/api';
 
 export async function createSession(data: StartSessionRequest): Promise<Session> {
@@ -39,5 +40,15 @@ export async function updateSessionStatus(
 
 export async function remindPartner(id: string): Promise<RemindPartnerResponse> {
   const res = await api.post<RemindPartnerResponse>(`/sessions/${id}/remind-partner`);
+  return res.data;
+}
+
+export async function getPartnerBContext(sessionId: string): Promise<PartnerBContext> {
+  const res = await api.get<PartnerBContext>(`/sessions/${sessionId}/partner-b-context`);
+  return res.data;
+}
+
+export async function snoozePartnerBInvite(sessionId: string): Promise<{ snoozedUntil: string; message: string }> {
+  const res = await api.post<{ snoozedUntil: string; message: string }>(`/sessions/${sessionId}/snooze`);
   return res.data;
 }

@@ -66,7 +66,7 @@ export function ReconnectionScreen() {
   const listRef = useRef<FlatList>(null);
 
   const partnerName = couple?.userB?.name || 'Your partner';
-  const { messages, isMyTurn, sendMessage } = useReconnection(route.params.sessionId, partnerName);
+  const { messages, isMyTurn, sending, sendMessage } = useReconnection(route.params.sessionId, partnerName);
 
   const handleSend = useCallback(async (text?: string) => {
     const msg = (text || value).trim();
@@ -150,9 +150,9 @@ export function ReconnectionScreen() {
               <Heart size={10} color={colors.textInverse} fill={colors.textInverse} />
             </View>
           </View>
-          <View>
-            <Text style={styles.topTitle}>Guided Reconnection</Text>
-            <Text style={styles.topSubtitle}>The AI will guide you both</Text>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Text style={styles.topTitle} numberOfLines={1}>Guided Reconnection</Text>
+            <Text style={styles.topSubtitle} numberOfLines={1}>The AI will guide you both</Text>
           </View>
         </View>
 
@@ -182,7 +182,7 @@ export function ReconnectionScreen() {
           data={messages}
           keyExtractor={(item) => item.id}
           renderItem={renderMessage}
-          contentContainerStyle={styles.messageList}
+          contentContainerStyle={[styles.messageList, { flexGrow: 1, justifyContent: 'flex-end' as const }]}
           onContentSizeChange={() => listRef.current?.scrollToEnd({ animated: true })}
         />
 
@@ -229,15 +229,15 @@ export function ReconnectionScreen() {
           {/* Send button */}
           <Pressable
             onPress={() => handleSend()}
-            disabled={!isMyTurn || !value.trim()}
+            disabled={!isMyTurn || !value.trim() || sending}
             style={[
               styles.sendBtn,
-              (!isMyTurn || !value.trim()) && styles.sendBtnDisabled,
+              (!isMyTurn || !value.trim() || sending) && styles.sendBtnDisabled,
             ]}
           >
             <Send
               size={16}
-              color={!isMyTurn || !value.trim() ? colors.textMuted : colors.textInverse}
+              color={!isMyTurn || !value.trim() || sending ? colors.textMuted : colors.textInverse}
             />
           </Pressable>
         </View>
@@ -272,13 +272,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+    minWidth: 0,
   },
   avatarGroup: {
     flexDirection: 'row',
     alignItems: 'center',
   },
   avatarOverlap: {
-    marginLeft: -10,
+    marginLeft: -12,
   },
   heartCircle: {
     width: 22,
@@ -304,7 +305,7 @@ const styles = StyleSheet.create({
   commitBtn: {
     minHeight: 36,
     justifyContent: 'center',
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     borderRadius: radius.pill,
     backgroundColor: colors.orangeTint,
   },
@@ -430,7 +431,7 @@ const styles = StyleSheet.create({
     gap: 8,
     paddingHorizontal: 16,
     paddingVertical: 12,
-    paddingBottom: 28,
+    paddingBottom: 20,
     borderTopWidth: 1,
     borderTopColor: colors.border,
     backgroundColor: colors.bgElevated,

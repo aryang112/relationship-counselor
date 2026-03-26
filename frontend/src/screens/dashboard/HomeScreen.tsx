@@ -7,14 +7,14 @@
  *   - ScrollView with warm bgPrimary background
  *   - Orange gradient hero card with greeting, partner info, relationship stats
  *   - Main CTA card ("Start a Mediation") with emoji icon
- *   - Love Bank rotating quote card (orangeTint bg, orangeMid border)
+ *   - Love Bank personalized quote card (orangeTint bg, orangeMid border)
  *   - Recent sessions section
  *   - Quick actions pill row
  *
  * Preserves all existing hook integrations (useSessionList, useAuthStore).
  */
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -23,13 +23,11 @@ import {
   Share,
   ActivityIndicator,
   ScrollView,
-  Dimensions,
-  Animated as RNAnimated,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
-import { ChevronRight, Settings, BookOpen, MessageCircle, Zap } from 'lucide-react-native';
+import { ChevronRight, Settings } from 'lucide-react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Avatar } from '../../components/ui/Avatar';
 import { Button } from '../../components/ui/Button';
@@ -41,23 +39,31 @@ import { colors, typography, fontFamilies, spacing, radius, shadows } from '../.
 import { useAuthStore } from '../../store/authStore';
 import { useUIStore } from '../../store/uiStore';
 import { createInvite } from '../../services/auth';
-import { successTap, lightTap } from '../../utils/haptics';
-import { formatDate } from '../../utils/format';
+import { successTap } from '../../utils/haptics';
 import type { Session } from '../../types/session';
 import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
 
 type Navigation = NativeStackNavigationProp<MainNavigatorParamList>;
 
-const SCREEN_WIDTH = Dimensions.get('window').width;
+/** Returns a personalized Love Bank quote using the partner's name */
+function getLoveBankQuote(partnerName: string): string {
+  const quotes = [
+    `"The small things are never small when it comes to you and ${partnerName}."`,
+    `"Every time you choose understanding, you're choosing ${partnerName}."`,
+    `"You and ${partnerName} chose each other. That still matters."`,
+    `"Love isn't about being perfect — it's about showing up for ${partnerName}."`,
+    `"The strongest couples fight for each other, not with each other."`,
+    `"${partnerName} doesn't need you to fix everything — just to listen."`,
+    `"Choosing to understand ${partnerName}'s perspective is an act of love."`,
+    `"Every conversation is a chance to know ${partnerName} a little deeper."`,
+  ];
+  return quotes[Math.floor(Math.random() * quotes.length)];
+}
 
-/** Love Bank affirmation quotes shown on a rotating basis */
-const LOVE_BANK_QUOTES = [
-  '"The small things are never small when it comes to love."',
-  '"Every act of kindness is a deposit into your relationship."',
-  '"You chose each other. That matters."',
-  '"Love is not about perfection — it is about showing up."',
-  '"The strongest couples are the ones who fight for each other, not with each other."',
-];
+/** Capitalize the first letter of a string */
+function capitalizeFirst(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
 
 function isActive(status: Session['status']) {
   return status !== 'resolved' && status !== 'abandoned';
@@ -71,28 +77,6 @@ export function HomeScreen() {
   const addToast = useUIStore((s) => s.addToast);
   const setCouple = useAuthStore((s) => s.setCouple);
   const [inviteLoading, setInviteLoading] = useState(false);
-
-  // Love Bank rotating quote
-  const [quoteIndex, setQuoteIndex] = useState(0);
-  const fadeAnim = useRef(new RNAnimated.Value(1)).current;
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      RNAnimated.timing(fadeAnim, {
-        toValue: 0,
-        duration: 400,
-        useNativeDriver: true,
-      }).start(() => {
-        setQuoteIndex((prev) => (prev + 1) % LOVE_BANK_QUOTES.length);
-        RNAnimated.timing(fadeAnim, {
-          toValue: 1,
-          duration: 400,
-          useNativeDriver: true,
-        }).start();
-      });
-    }, 8000);
-    return () => clearInterval(interval);
-  }, [fadeAnim]);
 
   const hasCoupleFormed = couple && couple.userBId;
 
@@ -158,15 +142,11 @@ export function HomeScreen() {
     return partner?.name?.split(' ')[0] || 'Partner';
   }, [user?.id, couple]);
 
-  // Calculate "together" days — prefer datingStartDate (e.g. "July 2024"), fallback to createdAt
-  const togetherDays = useMemo(() => {
-    const dateStr = couple?.datingStartDate || couple?.createdAt;
-    if (!dateStr) return null;
-    const parsed = new Date(dateStr);
-    if (isNaN(parsed.getTime())) return null;
-    const diff = Date.now() - parsed.getTime();
-    return Math.max(0, Math.floor(diff / (1000 * 60 * 60 * 24)));
-  }, [couple?.datingStartDate, couple?.createdAt]);
+  // Pick one random Love Bank quote per mount (refreshes each app open)
+  const loveBankQuote = useMemo(
+    () => getLoveBankQuote(partnerName),
+    [partnerName],
+  );
 
   return (
     <SafeArea>
@@ -215,11 +195,7 @@ export function HomeScreen() {
                 </Text>
               </View>
             )}
-            {togetherDays !== null && (
-              <Text style={styles.togetherText}>
-                Together {togetherDays} days  ❤️
-              </Text>
-            )}
+            {/* togetherDays removed — not useful until datingStartDate is collected */}
           </View>
 
           {/* Stats summary */}
@@ -252,7 +228,6 @@ export function HomeScreen() {
           {/* ── Main CTA Card: Start a Mediation ── */}
           <Pressable
             onPress={() => {
-              lightTap();
               navigation.navigate('StartMediation');
             }}
             style={({ pressed }) => [
@@ -285,25 +260,44 @@ export function HomeScreen() {
                   <Text style={styles.heartIcon}>❤️</Text>
                   <Avatar name={couple?.userB?.name || 'B'} size="sm" partnerRole="B" />
                 </View>
-                <Badge label="In Session" variant="active" />
+                <Badge
+                  label={activeSession.status === 'awaiting_partner_b' ? 'Awaiting Partner' : 'In Session'}
+                  variant="active"
+                />
               </View>
               <Text style={styles.activeTopic} numberOfLines={2}>
-                {activeSession.topic || activeSession.context || 'Open conversation'}
+                {capitalizeFirst(activeSession.topicTag || activeSession.topic || activeSession.context || 'Open conversation')}
               </Text>
-              <Button
-                title="Continue Session →"
-                onPress={() => handleOpenSession(activeSession)}
-                style={styles.continueBtn}
-              />
+              {activeSession.status === 'awaiting_partner_b' && activeSession.initiatedBy !== user?.id ? (
+                /* Partner B sees invite card */
+                <Button
+                  title="Share my side →"
+                  onPress={() => navigation.navigate('PartnerBEntry', { sessionId: activeSession.id })}
+                  style={styles.continueBtn}
+                />
+              ) : activeSession.status === 'awaiting_partner_b' && activeSession.initiatedBy === user?.id ? (
+                /* Partner A sees waiting state */
+                <View style={styles.waitingState}>
+                  <Text style={styles.waitingText}>
+                    Waiting for {partnerName} to share their side
+                  </Text>
+                </View>
+              ) : (
+                <Button
+                  title="Continue Session →"
+                  onPress={() => handleOpenSession(activeSession)}
+                  style={styles.continueBtn}
+                />
+              )}
             </Card>
           )}
 
           {/* ── Love Bank Card ── */}
           <View style={styles.loveBankCard}>
             <Text style={styles.loveBankLabel}>YOUR LOVE BANK</Text>
-            <RNAnimated.Text style={[styles.loveBankQuote, { opacity: fadeAnim }]}>
-              {LOVE_BANK_QUOTES[quoteIndex]}
-            </RNAnimated.Text>
+            <Text style={styles.loveBankQuote}>
+              {loveBankQuote}
+            </Text>
           </View>
 
           {/* ── Recent Sessions ── */}
@@ -332,39 +326,7 @@ export function HomeScreen() {
             </View>
           )}
 
-          {/* ── Quick Actions ── */}
-          <View style={styles.quickActionsSection}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.quickActionsRow}
-            >
-              <Pressable
-                style={styles.quickPill}
-                onPress={() => {
-                  lightTap();
-                  navigation.navigate('LearningsHistory');
-                }}
-              >
-                <BookOpen color={colors.orangeMid} size={16} />
-                <Text style={styles.quickPillText}>Our Learnings</Text>
-              </Pressable>
-              <Pressable
-                style={styles.quickPill}
-                onPress={() => addToast('Partner notes coming in the next update!', 'info')}
-              >
-                <MessageCircle color={colors.orangeMid} size={16} />
-                <Text style={styles.quickPillText}>Send Partner Note</Text>
-              </Pressable>
-              <Pressable
-                style={styles.quickPill}
-                onPress={() => addToast('Coming soon!', 'info')}
-              >
-                <Zap color={colors.orangeMid} size={16} />
-                <Text style={styles.quickPillText}>Check In</Text>
-              </Pressable>
-            </ScrollView>
-          </View>
+          {/* Quick Actions — Learnings/Send Partner Note removed per UX review */}
 
           {/* ── Empty State ── */}
           {!activeSession && pastSessions.length === 0 && (
@@ -425,6 +387,7 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 34,
     flexShrink: 1,
+    maxWidth: '80%',
   },
   helloEmoji: {
     fontSize: 26,
@@ -451,12 +414,6 @@ const styles = StyleSheet.create({
     fontFamily: fontFamilies.body,
     fontSize: 14,
     color: 'rgba(255,255,255,0.8)',
-  },
-  togetherText: {
-    fontFamily: fontFamilies.body,
-    fontSize: 15,
-    color: 'rgba(255,255,255,0.9)',
-    marginTop: 4,
   },
   heroFooter: {
     marginTop: spacing.sm,
@@ -577,6 +534,17 @@ const styles = StyleSheet.create({
   continueBtn: {
     width: '100%',
   },
+  waitingState: {
+    paddingVertical: spacing.sm,
+    alignItems: 'center',
+  },
+  waitingText: {
+    fontFamily: fontFamilies.body,
+    fontSize: 14,
+    color: colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
 
   // Love Bank card
   loveBankCard: {
@@ -619,30 +587,6 @@ const styles = StyleSheet.create({
     color: colors.orangeMid,
   },
 
-  // Quick actions
-  quickActionsSection: {
-    marginBottom: spacing.lg,
-  },
-  quickActionsRow: {
-    gap: 10,
-    flexDirection: 'row',
-  },
-  quickPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    backgroundColor: colors.bgElevated,
-    borderRadius: radius.pill,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  quickPillText: {
-    fontFamily: fontFamilies.bodyBold,
-    fontSize: 13,
-    color: colors.textPrimary,
-  },
 
   // Empty state
   emptyContainer: {

@@ -1,6 +1,7 @@
 import {
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
@@ -33,6 +34,12 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard)
+  @Get('me')
+  async getMe(@Request() req) {
+    return req.user;
+  }
+
+  @UseGuards(JwtAuthGuard)
   @Patch('profile')
   async updateProfile(@Request() req, @Body(ValidationPipe) dto: UpdateProfileDto) {
     return this.authService.updateProfile(req.user.id, dto);
@@ -48,5 +55,18 @@ export class AuthController {
   @Get('consent-status')
   async getConsentStatus(@Request() req) {
     return this.authService.getConsentStatus(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('ai-consent')
+  @HttpCode(HttpStatus.OK)
+  async recordAiConsent(@Request() req) {
+    return this.authService.recordAiConsent(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('account')
+  async deleteAccount(@Request() req, @Body() body: { reason?: string }) {
+    return this.authService.deleteAccount(req.user.id, body.reason);
   }
 }

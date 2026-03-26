@@ -5,9 +5,11 @@ import { Container } from '../../components/layout/Container';
 import { KeyboardAware } from '../../components/layout/KeyboardAware';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { KeyboardDoneBar, KEYBOARD_DONE_ID } from '../../components/ui/KeyboardDoneBar';
 import { useThemeColors } from '../../theme';
-import { acceptInvite } from '../../services/auth';
+import { validateInvite, acceptInvite } from '../../services/auth';
 import { useAuthStore } from '../../store/authStore';
+import { useOnboardingStore } from '../../store/onboardingStore';
 import { useUIStore } from '../../store/uiStore';
 import { successTap } from '../../utils/haptics';
 
@@ -23,7 +25,9 @@ export function AcceptInviteScreen({
   onBack,
 }: AcceptInviteScreenProps) {
   const colors = useThemeColors();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const setCouple = useAuthStore((s) => s.setCouple);
+  const setPendingInviteToken = useOnboardingStore((s) => s.setPendingInviteToken);
   const addToast = useUIStore((s) => s.addToast);
   const [token, setToken] = useState(prefillToken || '');
   const [loading, setLoading] = useState(false);
@@ -32,8 +36,18 @@ export function AcceptInviteScreen({
     if (!token.trim()) return;
     setLoading(true);
     try {
-      const couple = await acceptInvite({ inviteToken: token.trim() });
-      setCouple(couple);
+      if (isAuthenticated) {
+        // Authenticated user — accept the invite and link the couple
+        const couple = await acceptInvite({ inviteToken: token.trim() });
+        setCouple(couple);
+      } else {
+        // Unauthenticated user — just validate the token and store it for later
+        const result = await validateInvite(token.trim());
+        if (result.valid) {
+          // Store the token so we can accept it after registration
+          setPendingInviteToken(token.trim());
+        }
+      }
       successTap();
       onSuccess();
     } catch (err: any) {
@@ -42,10 +56,11 @@ export function AcceptInviteScreen({
     } finally {
       setLoading(false);
     }
-  }, [token, setCouple, addToast, onSuccess]);
+  }, [token, isAuthenticated, setCouple, setPendingInviteToken, addToast, onSuccess]);
 
   return (
     <SafeArea>
+      <KeyboardDoneBar />
       <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
         <View style={{ flex: 1 }}>
           <KeyboardAware style={styles.content}>
@@ -65,6 +80,7 @@ export function AcceptInviteScreen({
                 autoCapitalize="none"
                 returnKeyType="done"
                 onSubmitEditing={Keyboard.dismiss}
+                inputAccessoryViewID={KEYBOARD_DONE_ID}
               />
 
               <Button

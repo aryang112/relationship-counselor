@@ -1,13 +1,23 @@
 /**
  * OnboardingNavigator — Guides new users through the full onboarding flow.
  *
- * Flow order (per RelateApp_DesignSpec.md S3):
- *   Splash -> Promise -> Consent -> YourName -> CommunicationStyle -> ConflictFeelings
- *   -> RelationshipStory -> PartnerDetails -> LoveBank -> ConflictPreferences
+ * De-escalation-focused flow (5 quiz screens, all selection-based, before signup):
+ *   Splash -> Promise -> YourName -> CommunicationStyle -> ConflictFeelings
+ *   -> PartnerDetails -> ConflictPreferences -> [CreateAccount] -> Consent
  *   -> InvitePartner -> WaitingForPartner -> Connected -> Agreement -> Tutorial -> (MainApp)
  *
+ * Every quiz question maps to a specific de-escalation strategy the AI can use:
+ *   - Communication style → conflict role (pursuer/withdrawer)
+ *   - Conflict feelings → triggers & raw spots
+ *   - Partner details → partner's patterns + where they met
+ *   - Conflict preferences → resolution speed, attachment, Horsemen patterns
+ *
+ * CreateAccount is skipped if the user is already authenticated (e.g., User B via invite).
+ * Consent requires auth (JWT) so it comes after CreateAccount.
+ *
  * Each screen receives navigation callbacks (onNext, onBack) and a progress
- * value (0-1) for the thin orange progress bar.
+ * value (0-1) for the thin orange progress bar. Progress starts at ~15%
+ * (endowed progress effect) to boost completion rates.
  *
  * On completion, sets onboardingDone in the auth store and persists
  * the flag via expo-secure-store.
@@ -18,7 +28,7 @@ import { Share } from 'react-native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { useAuthStore } from '../store/authStore';
 import { useOnboardingStore } from '../store/onboardingStore';
-import { updateProfile, submitCoupleOnboarding } from '../services/auth';
+import { updateProfile, submitCoupleOnboarding, acceptInvite } from '../services/auth';
 import { setStoredUser } from '../services/api';
 import * as SecureStore from 'expo-secure-store';
 
@@ -28,9 +38,7 @@ import { PromiseScreen } from '../screens/onboarding/PromiseScreen';
 import { YourNameScreen } from '../screens/onboarding/YourNameScreen';
 import { CommunicationStyleScreen } from '../screens/onboarding/CommunicationStyleScreen';
 import { ConflictFeelingsScreen } from '../screens/onboarding/ConflictFeelingsScreen';
-import { RelationshipStoryScreen } from '../screens/onboarding/RelationshipStoryScreen';
 import { PartnerDetailsScreen } from '../screens/onboarding/PartnerDetailsScreen';
-import { LoveBankScreen } from '../screens/onboarding/LoveBankScreen';
 import { ConflictPreferencesScreen } from '../screens/onboarding/ConflictPreferencesScreen';
 import { ConsentScreen } from '../screens/onboarding/ConsentScreen';
 import { InvitePartnerScreen } from '../screens/onboarding/InvitePartnerScreen';
@@ -38,25 +46,29 @@ import { AcceptInviteScreen } from '../screens/onboarding/AcceptInviteScreen';
 import { WaitingForPartnerScreen } from '../screens/onboarding/WaitingForPartnerScreen';
 import { ConnectedScreen } from '../screens/onboarding/ConnectedScreen';
 import { AgreementScreen } from '../screens/onboarding/AgreementScreen';
+import { NotificationPermissionScreen } from '../screens/onboarding/NotificationPermissionScreen';
 import { TutorialScreen } from '../screens/onboarding/TutorialScreen';
+
+// ── Import auth screens for inline CreateAccount / Login ─────────────
+import { RegisterScreen } from '../screens/auth/RegisterScreen';
+import { LoginScreen } from '../screens/auth/LoginScreen';
 
 const ONBOARDING_KEY = 'onboarding_done';
 
-// Total number of progress-tracked screens (YourName through ConflictPreferences)
+// All 5 quiz screens tracked in the progress bar (before signup)
 const PROGRESS_SCREENS = [
   'YourName',
   'CommunicationStyle',
   'ConflictFeelings',
-  'RelationshipStory',
   'PartnerDetails',
-  'LoveBank',
   'ConflictPreferences',
 ] as const;
 
 function getProgress(screenName: string): number {
   const index = PROGRESS_SCREENS.indexOf(screenName as any);
   if (index === -1) return 0;
-  return (index + 1) / (PROGRESS_SCREENS.length + 1);
+  // Start at 15% to leverage the endowed progress effect
+  return 0.15 + ((index + 1) / (PROGRESS_SCREENS.length + 1)) * 0.85;
 }
 
 // ── Type Definitions ────────────────────────────────────────────────
@@ -64,19 +76,20 @@ function getProgress(screenName: string): number {
 export type OnboardingStackParamList = {
   Splash: undefined;
   Promise: undefined;
-  Consent: undefined;
   YourName: undefined;
   CommunicationStyle: undefined;
   ConflictFeelings: undefined;
-  RelationshipStory: undefined;
   PartnerDetails: undefined;
-  LoveBank: undefined;
   ConflictPreferences: undefined;
+  CreateAccount: undefined;
+  Login: undefined;
+  Consent: undefined;
   InvitePartner: undefined;
-  AcceptInvite: { token?: string } | undefined;
+  AcceptInvite: { token?: string; fromInvitePartner?: boolean } | undefined;
   WaitingForPartner: undefined;
   Connected: undefined;
   Agreement: undefined;
+  NotificationPermission: undefined;
   Tutorial: undefined;
   // Legacy alias
   CoupleSetup: undefined;
@@ -114,7 +127,7 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
       console.log('[ONBOARDING] Failed to update profile:', e);
     }
 
-    // Submit couple onboarding data (relationship story + all form data)
+    // Submit couple onboarding data (all quiz answers for AI analysis)
     try {
       const onboardingPayload = {
         datingStartDate: store.datingStartDate || undefined,
@@ -170,22 +183,12 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
       <Stack.Screen name="Promise">
         {({ navigation }) => (
           <PromiseScreen
-            onContinue={() => navigation.navigate('Consent')}
-          />
-        )}
-      </Stack.Screen>
-
-      {/* Screen 2.5: Legal Consent */}
-      <Stack.Screen name="Consent">
-        {({ navigation }) => (
-          <ConsentScreen
             onContinue={() => navigation.navigate('YourName')}
-            onBack={() => navigation.goBack()}
           />
         )}
       </Stack.Screen>
 
-      {/* Screen 3: Your Name */}
+      {/* Screen 3: Your Name + Gender (before auth — data stored locally) */}
       <Stack.Screen name="YourName">
         {({ navigation }) => (
           <YourNameScreen
@@ -195,7 +198,7 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
         )}
       </Stack.Screen>
 
-      {/* Screen 4a: Communication Style */}
+      {/* Screen 4: Communication Style — maps conflict role (pursuer/withdrawer) */}
       <Stack.Screen name="CommunicationStyle">
         {({ navigation }) => (
           <CommunicationStyleScreen
@@ -206,63 +209,90 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
         )}
       </Stack.Screen>
 
-      {/* Screen 4b: Conflict Feelings */}
+      {/* Screen 5: Conflict Feelings — maps triggers & raw spots */}
       <Stack.Screen name="ConflictFeelings">
         {({ navigation }) => (
           <ConflictFeelingsScreen
-            onNext={() => {
-              const couple = useAuthStore.getState().couple;
-              // User B skips RelationshipStory (User A already filled it)
-              if (couple?.userBId) {
-                navigation.navigate('PartnerDetails');
-              } else {
-                navigation.navigate('RelationshipStory');
-              }
-            }}
+            onNext={() => navigation.navigate('PartnerDetails')}
             onBack={() => navigation.goBack()}
             progress={getProgress('ConflictFeelings')}
           />
         )}
       </Stack.Screen>
 
-      {/* Screens 5a-5d: Relationship Story (multi-step) */}
-      <Stack.Screen name="RelationshipStory">
-        {({ navigation }) => (
-          <RelationshipStoryScreen
-            onNext={() => navigation.navigate('PartnerDetails')}
-            onBack={() => navigation.goBack()}
-            progress={getProgress('RelationshipStory')}
-          />
-        )}
-      </Stack.Screen>
-
-      {/* Screens 6a-6c: Partner Details (multi-step) */}
+      {/* Screen 6: Partner Details — name, gender, their patterns, where you met */}
       <Stack.Screen name="PartnerDetails">
         {({ navigation }) => (
           <PartnerDetailsScreen
-            onNext={() => navigation.navigate('LoveBank')}
+            onNext={() => navigation.navigate('ConflictPreferences')}
             onBack={() => navigation.goBack()}
             progress={getProgress('PartnerDetails')}
           />
         )}
       </Stack.Screen>
 
-      {/* Screen 7: Love Bank */}
-      <Stack.Screen name="LoveBank">
-        {({ navigation }) => (
-          <LoveBankScreen
-            onNext={() => navigation.navigate('ConflictPreferences')}
-            onBack={() => navigation.goBack()}
-            progress={getProgress('LoveBank')}
-          />
-        )}
-      </Stack.Screen>
-
-      {/* Screen 8: Conflict Preferences */}
+      {/* Screen 7: Conflict Preferences — resolution speed, attachment, Horsemen */}
       <Stack.Screen name="ConflictPreferences">
         {({ navigation }) => (
           <ConflictPreferencesScreen
             onNext={() => {
+              const isAuth = useAuthStore.getState().isAuthenticated;
+              if (isAuth) {
+                // Already authenticated (e.g., User B via invite) — skip CreateAccount
+                navigation.navigate('Consent');
+              } else {
+                navigation.navigate('CreateAccount');
+              }
+            }}
+            onBack={() => navigation.goBack()}
+            progress={getProgress('ConflictPreferences')}
+          />
+        )}
+      </Stack.Screen>
+
+      {/* Screen 8: Create Account (inline auth — before Consent which needs JWT) */}
+      <Stack.Screen name="CreateAccount">
+        {({ navigation }) => (
+          <RegisterScreen
+            onNavigateLogin={() => navigation.navigate('Login')}
+            onSuccess={() => navigation.navigate('Consent')}
+          />
+        )}
+      </Stack.Screen>
+
+      {/* Screen 8b: Login (for returning users who already have an account) */}
+      <Stack.Screen name="Login">
+        {({ navigation }) => (
+          <LoginScreen
+            onNavigateRegister={() => navigation.navigate('CreateAccount')}
+            onNavigateForgot={() => {}} // no-op for now
+            onSuccess={() => navigation.navigate('Consent')}
+          />
+        )}
+      </Stack.Screen>
+
+      {/* Screen 9: Legal Consent (requires JWT — must come after auth) */}
+      <Stack.Screen name="Consent">
+        {({ navigation }) => (
+          <ConsentScreen
+            onContinue={async () => {
+              // Check if Partner B has a pending invite token from before registration
+              const pendingToken = useOnboardingStore.getState().pendingInviteToken;
+              if (pendingToken) {
+                try {
+                  const coupleData = await acceptInvite({ inviteToken: pendingToken });
+                  useAuthStore.getState().setCouple(coupleData);
+                  useOnboardingStore.getState().setPendingInviteToken(null);
+                  // Couple is now formed — go to Connected
+                  navigation.navigate('Connected');
+                  return;
+                } catch (e) {
+                  console.log('[ONBOARDING] Failed to accept pending invite:', e);
+                  // Clear the invalid token and fall through to normal flow
+                  useOnboardingStore.getState().setPendingInviteToken(null);
+                }
+              }
+
               const couple = useAuthStore.getState().couple;
               // User B already has a couple — skip InvitePartner, go to Connected
               if (couple?.userBId) {
@@ -272,17 +302,16 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
               }
             }}
             onBack={() => navigation.goBack()}
-            progress={getProgress('ConflictPreferences')}
           />
         )}
       </Stack.Screen>
 
-      {/* Screen 9: Invite Partner */}
+      {/* Screen 10: Invite Partner */}
       <Stack.Screen name="InvitePartner">
         {({ navigation }) => (
           <InvitePartnerScreen
             onPartnerJoined={() => navigation.replace('Connected')}
-            onGoToAccept={() => navigation.navigate('AcceptInvite')}
+            onGoToAccept={() => navigation.navigate('AcceptInvite', { fromInvitePartner: true })}
             onSkip={() => navigation.replace('WaitingForPartner')}
           />
         )}
@@ -293,13 +322,21 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
         {({ navigation, route }) => (
           <AcceptInviteScreen
             prefillToken={route.params?.token}
-            onSuccess={() => navigation.replace('YourName')}
+            onSuccess={() => {
+              if (route.params?.fromInvitePartner) {
+                // User already completed onboarding questions — go straight to Connected
+                navigation.replace('Connected');
+              } else {
+                // New user (from Splash "I have a code") — start onboarding
+                navigation.replace('YourName');
+              }
+            }}
             onBack={() => navigation.goBack()}
           />
         )}
       </Stack.Screen>
 
-      {/* Screen 10: Waiting for Partner */}
+      {/* Screen 11: Waiting for Partner */}
       <Stack.Screen name="WaitingForPartner">
         {({ navigation }) => (
           <WaitingForPartnerScreen
@@ -319,7 +356,7 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
         )}
       </Stack.Screen>
 
-      {/* Screen 11: Connected Celebration */}
+      {/* Screen 12: Connected Celebration */}
       <Stack.Screen name="Connected">
         {({ navigation }) => (
           <ConnectedScreen
@@ -328,16 +365,23 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
         )}
       </Stack.Screen>
 
-      {/* Screen 12: Mutual Agreement (both partners must sign before sessions) */}
+      {/* Screen 13: Mutual Agreement (both partners must sign before sessions) */}
       <Stack.Screen name="Agreement">
         {({ navigation }) => (
           <AgreementScreen
-            onComplete={() => navigation.replace('Tutorial')}
+            onComplete={() => navigation.navigate('NotificationPermission')}
           />
         )}
       </Stack.Screen>
 
-      {/* Tutorial (final step before main app) */}
+      {/* Screen 14: Notification Permission (after Agreement, before finishing) */}
+      <Stack.Screen name="NotificationPermission">
+        {() => (
+          <NotificationPermissionScreen onNext={finishOnboarding} />
+        )}
+      </Stack.Screen>
+
+      {/* Tutorial — disabled per UX review, keeping screen for future use */}
       <Stack.Screen name="Tutorial">
         {() => <TutorialScreen onComplete={finishOnboarding} />}
       </Stack.Screen>

@@ -24,6 +24,7 @@
 
 import React from 'react';
 import { View, Text, StyleSheet, type ViewStyle } from 'react-native';
+import Animated, { FadeInRight, FadeInLeft, FadeIn } from 'react-native-reanimated';
 import { colors } from '../../theme/colors';
 import { shadows } from '../../theme/spacing';
 
@@ -35,42 +36,57 @@ interface ChatBubbleProps {
   role?: BubbleRole;
   timestamp?: string;
   style?: ViewStyle;
+  /** Optional index for stagger delay (each bubble delayed by index * 50ms). */
+  index?: number;
 }
 
-export function ChatBubble({ message, isUser, role, timestamp, style }: ChatBubbleProps) {
+export function ChatBubble({ message, isUser, role, timestamp, style, index }: ChatBubbleProps) {
   const effectiveRole: BubbleRole = role ?? (isUser ? 'user' : 'ai');
+  const staggerDelay = index != null ? index * 50 : 0;
 
   if (effectiveRole === 'ai') {
+    const aiEntering = staggerDelay > 0
+      ? FadeIn.duration(400).delay(100 + staggerDelay)
+      : FadeIn.duration(400).delay(100);
+
     return (
-      <View style={[styles.containerAI, style]}>
+      <Animated.View style={[styles.containerAI, style]} entering={aiEntering}>
         <View style={[styles.bubbleAI, shadows.card]}>
           <Text style={styles.relateLabel}>relate</Text>
           <Text style={styles.textAI}>{message}</Text>
         </View>
         {timestamp && <Text style={styles.timestampCenter}>{timestamp}</Text>}
-      </View>
+      </Animated.View>
     );
   }
 
   if (effectiveRole === 'user') {
+    const userEntering = staggerDelay > 0
+      ? FadeInRight.duration(300).springify().damping(15).stiffness(100).delay(staggerDelay)
+      : FadeInRight.duration(300).springify().damping(15).stiffness(100);
+
     return (
-      <View style={[styles.containerUser, style]}>
+      <Animated.View style={[styles.containerUser, style]} entering={userEntering}>
         <View style={styles.bubbleUser}>
           <Text style={styles.textUser}>{message}</Text>
         </View>
         {timestamp && <Text style={styles.timestampUser}>{timestamp}</Text>}
-      </View>
+      </Animated.View>
     );
   }
 
   // Partner B
+  const partnerEntering = staggerDelay > 0
+    ? FadeInLeft.duration(300).springify().damping(15).stiffness(100).delay(staggerDelay)
+    : FadeInLeft.duration(300).springify().damping(15).stiffness(100);
+
   return (
-    <View style={[styles.containerPartner, style]}>
+    <Animated.View style={[styles.containerPartner, style]} entering={partnerEntering}>
       <View style={styles.bubblePartner}>
         <Text style={styles.textPartner}>{message}</Text>
       </View>
       {timestamp && <Text style={styles.timestampPartner}>{timestamp}</Text>}
-    </View>
+    </Animated.View>
   );
 }
 

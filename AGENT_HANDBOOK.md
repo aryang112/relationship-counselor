@@ -399,6 +399,8 @@ workers/src/
 | PATCH | `/sessions/:id/unpacking/choice` | Set wait/view choice |
 | POST | `/sessions/:id/unpacking/unlock` | Manual unlock |
 | POST | `/sessions/:id/unpacking/feedback` | Submit feedback |
+| GET | `/sessions/:id/partner-b-context` | Partner B entry context (topic, opening msg, AI context) |
+| POST | `/sessions/:id/snooze` | Partner B snooze invite (2h) |
 
 ### AI (JWT required)
 | Method | Path | Description |
@@ -414,7 +416,8 @@ workers/src/
 User:       id, email, password, name, timezone, tosVersionAgreed, privacyVersionAgreed,
             consentAgreedAt, dateOfBirthConfirmed, isMinorFlagged
 Couple:     id, userAId, userBId, inviteToken, userASignedAt, userBSignedAt
-Session:    id, coupleId, status, initiatedBy, topic, context, unpacking state fields
+Session:    id, coupleId, status, initiatedBy, topic, context, topicTag, topicTagGeneratedAt,
+            partnerBSnoozedUntil, partnerAExtraction (JSON), unpacking state fields
 Interview:  id, sessionId, userId, responses (JSON), notes, completedAt (null=draft)
 Unpacking:  id, sessionId, surfaceConflict, partnerA/BExperience, sharedTruths (JSON),
             deeperInsight, patternRecognition, tone, feedbackCount, lastFeedbackReason
@@ -514,6 +517,18 @@ When launching a subagent, always include:
 - ✅ Legal consent screen (clickwrap, checkbox, ToS/PP modal viewer)
 - ✅ Pre-session safety reminder screen (before Interview)
 - ✅ Crisis resources modal (tappable hotlines, always accessible)
+
+### Completed (Partner B Entry Flow — March 22, 2026)
+- ✅ Database: 4 new Session fields (topicTag, topicTagGeneratedAt, partnerBSnoozedUntil, partnerAExtraction)
+- ✅ Backend: `awaiting_partner_b` session status in state machine
+- ✅ Backend: AI extraction of Partner A context (topicTag, issues, needs, emotions)
+- ✅ Backend: Partner B invite notifications + 4h/24h/72h reminders
+- ✅ Backend: `GET /sessions/:id/partner-b-context` + `POST /sessions/:id/snooze` endpoints
+- ✅ Backend: Context-aware next-question generation for Partner B
+- ✅ Frontend: PartnerBEntryScreen (topic tag, privacy note, CTA, snooze)
+- ✅ Frontend: HomeScreen Partner B routing (invite card vs waiting state)
+- ✅ Frontend: useInterview accepts custom opening message for Partner B
+- ✅ Frontend: StatusBadge + SessionDetailScreen updated for new status
 
 ### Pending (Backend)
 - 🔴 TASK-B2: Crisis language blocking flow

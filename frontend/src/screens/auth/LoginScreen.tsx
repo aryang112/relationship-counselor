@@ -24,6 +24,7 @@ import { Container } from '../../components/layout/Container';
 import { KeyboardAware } from '../../components/layout/KeyboardAware';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { KeyboardDoneBar, KEYBOARD_DONE_ID } from '../../components/ui/KeyboardDoneBar';
 import { colors } from '../../theme/colors';
 import { typography, fontFamilies } from '../../theme/typography';
 import { spacing } from '../../theme/spacing';
@@ -88,6 +89,7 @@ export function LoginScreen({
 
   return (
     <SafeArea>
+      <KeyboardDoneBar />
       <KeyboardAware style={styles.content}>
         <Container>
           <View style={styles.header}>
@@ -111,6 +113,7 @@ export function LoginScreen({
                 onChangeText={onChange}
                 onBlur={onBlur}
                 error={errors.email?.message}
+                inputAccessoryViewID={KEYBOARD_DONE_ID}
               />
             )}
           />
@@ -128,6 +131,7 @@ export function LoginScreen({
                 onChangeText={onChange}
                 onBlur={onBlur}
                 error={errors.password?.message}
+                inputAccessoryViewID={KEYBOARD_DONE_ID}
               />
             )}
           />

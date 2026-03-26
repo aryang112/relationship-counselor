@@ -1,11 +1,13 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { InterviewResponse } from '../types/session';
 import {
   getInterview,
+  getNextQuestion,
   submitInterview,
   saveDraft,
   transcribeAudio,
 } from '../services/interviews';
+import { getGenderCopy } from '../utils/genderCopy';
 
 interface ChatMessage {
   id: string;
@@ -18,19 +20,21 @@ interface UseInterviewReturn {
   messages: ChatMessage[];
   isLoading: boolean;
   isTranscribing: boolean;
+  isThinking: boolean;
   isComplete: boolean;
   sendTextResponse: (text: string) => Promise<void>;
   sendVoiceResponse: (audioUri: string) => Promise<void>;
   exitAndSaveDraft: () => Promise<void>;
 }
 
-const INITIAL_QUESTION =
-  "Let's start by understanding what's been on your mind. In your own words, what's the topic or situation you'd like to work through?";
+const MAX_QUESTIONS = 7;
 
-export function useInterview(sessionId: string): UseInterviewReturn {
+export function useInterview(sessionId: string, partnerBOpeningMessage?: string, gender?: string | null, userName?: string | null): UseInterviewReturn {
+  const copy = useMemo(() => getGenderCopy(gender, userName), [gender, userName]);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const responsesRef = useRef<InterviewResponse[]>([]);
 
@@ -81,7 +85,7 @@ export function useInterview(sessionId: string): UseInterviewReturn {
           restored.push({
             id: 'ai-next',
             role: 'ai',
-            text: 'Thanks for sharing that. Would you like to add anything else, or shall we continue to the next question?',
+            text: copy.resumeMessage,
             timestamp: new Date().toISOString(),
           });
           setMessages(restored);
@@ -89,14 +93,20 @@ export function useInterview(sessionId: string): UseInterviewReturn {
       } catch {
         // No existing interview, start fresh
         if (!mounted) return;
-        setMessages([
-          {
-            id: 'ai-0',
-            role: 'ai',
-            text: INITIAL_QUESTION,
-            timestamp: new Date().toISOString(),
-          },
-        ]);
+        // Brief delay to simulate AI "thinking" before first message
+        setIsThinking(true);
+        setTimeout(() => {
+          if (!mounted) return;
+          setIsThinking(false);
+          setMessages([
+            {
+              id: 'ai-0',
+              role: 'ai',
+              text: partnerBOpeningMessage || copy.initialQuestion,
+              timestamp: new Date().toISOString(),
+            },
+          ]);
+        }, 1500);
       } finally {
         if (mounted) setIsLoading(false);
       }
@@ -104,7 +114,7 @@ export function useInterview(sessionId: string): UseInterviewReturn {
     return () => {
       mounted = false;
     };
-  }, [sessionId]);
+  }, [sessionId, copy]);
 
   const addMessage = useCallback((role: 'ai' | 'user', text: string) => {
     const msg: ChatMessage = {
@@ -117,12 +127,31 @@ export function useInterview(sessionId: string): UseInterviewReturn {
     return msg;
   }, []);
 
+  /**
+   * Build the OpenAI-compatible conversation history from the current
+   * Q&A pairs for the next-question endpoint.
+   */
+  const buildConversationHistory = useCallback(
+    (currentResponses: InterviewResponse[], latestAnswer: string) => {
+      const history: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+
+      // Add all previous Q&A pairs
+      for (const r of currentResponses) {
+        history.push({ role: 'assistant', content: r.question });
+        history.push({ role: 'user', content: r.answer });
+      }
+
+      return history;
+    },
+    [],
+  );
+
   const handleResponse = useCallback(
     async (text: string) => {
       addMessage('user', text);
 
       const currentQuestion =
-        messages.filter((m) => m.role === 'ai').pop()?.text || INITIAL_QUESTION;
+        messages.filter((m) => m.role === 'ai').pop()?.text || copy.initialQuestion;
 
       const response: InterviewResponse = {
         question: currentQuestion,
@@ -138,11 +167,11 @@ export function useInterview(sessionId: string): UseInterviewReturn {
         // Silent fail for draft save
       }
 
-      // After 5 Q&A pairs, finish the interview
-      if (responsesRef.current.length >= 5) {
+      // After MAX_QUESTIONS Q&A pairs, finish the interview
+      if (responsesRef.current.length >= MAX_QUESTIONS) {
         addMessage(
           'ai',
-          'Thank you for sharing so openly. Your responses have been recorded and will be used to generate insights for both of you.',
+          copy.completionMessage,
         );
         try {
           await submitInterview(sessionId, {
@@ -158,21 +187,47 @@ export function useInterview(sessionId: string): UseInterviewReturn {
         return;
       }
 
-      // Generate next question
-      const FOLLOW_UPS = [
-        'How did this situation make you feel emotionally?',
-        'What do you think your partner was feeling during this?',
-        "What would the ideal outcome look like for you?",
-        "Is there anything you wish you'd said or done differently?",
-      ];
-      const nextQ =
-        FOLLOW_UPS[responsesRef.current.length - 1] ||
-        'Is there anything else you would like to share?';
+      // Get dynamic AI follow-up question
+      setIsThinking(true);
+      try {
+        // Natural thinking delay — makes the AI feel more human
+        const thinkingDelay = 800 + Math.random() * 1200; // 0.8-2.0 seconds
+        await new Promise((resolve) => setTimeout(resolve, thinkingDelay));
 
-      // Simulate a slight delay for natural feel
-      setTimeout(() => addMessage('ai', nextQ), 800);
+        const conversationHistory = buildConversationHistory(
+          responsesRef.current,
+          text,
+        );
+        const nextQ = await getNextQuestion(sessionId, conversationHistory);
+
+        // Split multi-sentence responses into separate bubbles for natural feel
+        const sentences = nextQ.match(/[^.!?]+[.!?]+/g) || [nextQ];
+        if (sentences.length >= 2 && sentences.length <= 3) {
+          // Split into 2 bubbles: acknowledgment + question
+          const splitPoint = 1; // First sentence is acknowledgment
+          const firstPart = sentences.slice(0, splitPoint).join(' ').trim();
+          const secondPart = sentences.slice(splitPoint).join(' ').trim();
+
+          addMessage('ai', firstPart);
+          // Show typing indicator again for second bubble
+          setIsThinking(true);
+          await new Promise((resolve) => setTimeout(resolve, 800 + Math.random() * 800));
+          setIsThinking(false);
+          addMessage('ai', secondPart);
+        } else {
+          addMessage('ai', nextQ);
+        }
+      } catch {
+        // Fallback if AI call fails
+        addMessage(
+          'ai',
+          copy.fallbackQuestion,
+        );
+      } finally {
+        setIsThinking(false);
+      }
     },
-    [sessionId, messages, addMessage],
+    [sessionId, messages, addMessage, buildConversationHistory, copy],
   );
 
   const sendTextResponse = useCallback(
@@ -210,6 +265,7 @@ export function useInterview(sessionId: string): UseInterviewReturn {
     messages,
     isLoading,
     isTranscribing,
+    isThinking,
     isComplete,
     sendTextResponse,
     sendVoiceResponse,

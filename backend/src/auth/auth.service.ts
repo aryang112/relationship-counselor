@@ -63,6 +63,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
+        gender: user.gender,
       },
     };
   }
@@ -97,6 +98,7 @@ export class AuthService {
         id: user.id,
         email: user.email,
         name: user.name,
+        gender: user.gender,
       },
     };
   }
@@ -179,6 +181,70 @@ export class AuthService {
     };
   }
 
+  async recordAiConsent(userId: string) {
+    const user = await this.prisma.user.update({
+      where: { id: userId },
+      data: { aiConsentAgreedAt: new Date() },
+    });
+
+    return {
+      message: 'AI consent recorded',
+      aiConsentAgreedAt: user.aiConsentAgreedAt?.toISOString(),
+    };
+  }
+
+  async deleteAccount(userId: string, reason?: string) {
+    await this.prisma.$transaction(async (tx) => {
+      // Delete interviews by user
+      await tx.interview.deleteMany({ where: { userId } });
+
+      // Find all couples this user belongs to
+      const couplesA = await tx.couple.findMany({ where: { userAId: userId } });
+      const couplesB = await tx.couple.findMany({ where: { userBId: userId } });
+      const allCoupleIds = [
+        ...couplesA.map((c) => c.id),
+        ...couplesB.map((c) => c.id),
+      ];
+
+      if (allCoupleIds.length > 0) {
+        // Delete unpacking records linked to sessions in these couples
+        const sessions = await tx.session.findMany({
+          where: { coupleId: { in: allCoupleIds } },
+          select: { id: true },
+        });
+        const sessionIds = sessions.map((s) => s.id);
+
+        if (sessionIds.length > 0) {
+          await tx.unpacking.deleteMany({ where: { sessionId: { in: sessionIds } } });
+          await tx.interview.deleteMany({ where: { sessionId: { in: sessionIds } } });
+          await tx.session.deleteMany({ where: { id: { in: sessionIds } } });
+        }
+
+        await tx.couple.deleteMany({ where: { id: { in: allCoupleIds } } });
+      }
+
+      // Delete consent logs
+      await tx.consentLog.deleteMany({ where: { userId } });
+
+      // Soft-delete the user: overwrite PII, set deletedAt
+      await tx.user.update({
+        where: { id: userId },
+        data: {
+          deletedAt: new Date(),
+          email: `deleted_${userId}@deleted.relate.app`,
+          password: 'DELETED',
+          name: 'Deleted User',
+          gender: null,
+          onboardingData: null,
+        },
+      });
+    });
+
+    return {
+      message: 'Account scheduled for deletion. Your data will be permanently removed within 30 days.',
+    };
+  }
+
   async validateUser(userId: string) {
     const user = await this.prisma.user.findUnique({
       where: { id: userId },
@@ -192,6 +258,7 @@ export class AuthService {
       id: user.id,
       email: user.email,
       name: user.name,
+      gender: user.gender,
     };
   }
 }
