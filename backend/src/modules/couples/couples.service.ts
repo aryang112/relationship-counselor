@@ -63,6 +63,32 @@ export class CouplesService {
     return { couple, wasReminder: false };
   }
 
+  /**
+   * Validates an invite token without accepting it.
+   * Used by unauthenticated users (Partner B) to verify the token
+   * before they go through onboarding and registration.
+   */
+  async validateInvite(inviteToken: string) {
+    const invite = await this.prisma.couple.findUnique({
+      where: { inviteToken },
+      include: coupleInclude,
+    });
+
+    if (!invite) {
+      throw new NotFoundException('Invite not found or already used');
+    }
+
+    if (invite.userBId) {
+      throw new NotFoundException('Invite has already been accepted');
+    }
+
+    return {
+      valid: true,
+      inviterName: invite.userA?.name || 'Your partner',
+      coupleId: invite.id,
+    };
+  }
+
   async acceptInvite(userId: string, inviteToken: string) {
     const invite = await this.prisma.couple.findUnique({
       where: { inviteToken },
@@ -111,16 +137,51 @@ export class CouplesService {
       throw new ConflictException('Your partner must join before signing');
     }
 
-    if (couple.agreementSignedAt) {
+    // Determine which partner is signing
+    const isUserA = couple.userAId === userId;
+    const isUserB = couple.userBId === userId;
+
+    // Check if this user already signed
+    if (isUserA && couple.userASignedAt) {
+      return couple;
+    }
+    if (isUserB && couple.userBSignedAt) {
       return couple;
     }
 
+    // Update the appropriate signature field
+    const updateData = isUserA
+      ? { userASignedAt: new Date() }
+      : { userBSignedAt: new Date() };
+
     return this.prisma.couple.update({
       where: { id: couple.id },
-      data: {
-        agreementSignedAt: new Date(),
-      },
+      data: updateData,
       include: coupleInclude,
     });
+  }
+
+  async submitOnboarding(userId: string, datingStartDate?: string, data?: Record<string, any>) {
+    const couple = await this.getCoupleForUser(userId);
+
+    const updateData: Record<string, any> = {};
+    if (datingStartDate) updateData.datingStartDate = datingStartDate;
+
+    // Merge new onboarding data with existing (each partner adds their own)
+    const existing = (couple.onboardingData as Record<string, any>) || {};
+    const isUserA = couple.userAId === userId;
+    const key = isUserA ? 'userA' : 'userB';
+    existing[key] = data || {};
+    updateData.onboardingData = existing;
+
+    return this.prisma.couple.update({
+      where: { id: couple.id },
+      data: updateData,
+      include: coupleInclude,
+    });
+  }
+
+  bothPartnersSignedAgreement(couple: any): boolean {
+    return !!(couple.userASignedAt && couple.userBSignedAt);
   }
 }

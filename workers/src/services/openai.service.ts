@@ -3,6 +3,8 @@ import { config } from '../config';
 
 export class OpenAIService {
   private client: OpenAI;
+  private readonly primaryModel = config.openai.modelPrimary;
+  private readonly fastModel = config.openai.modelFast;
 
   constructor() {
     this.client = new OpenAI({
@@ -26,7 +28,7 @@ export class OpenAIService {
     const systemPrompt = this.buildInterviewSystemPrompt(mandatoryData);
 
     const response = await this.client.chat.completions.create({
-      model: 'gpt-4',
+      model: this.fastModel,
       messages: [
         { role: 'system', content: systemPrompt },
         ...conversationHistory,
@@ -51,15 +53,19 @@ export class OpenAIService {
     patterns: string[];
     recommendations: string[];
   }> {
-    const systemPrompt = `You are a relationship counselor analyzing a couple's conflict.
-Your role is to:
-1. Find shared understanding between partners
-2. Reframe behaviors with positive intent (never say "you always" or "you never")
-3. Identify underlying needs and emotions
-4. Show how both partners are on the same team
-5. Provide actionable insights
+    const systemPrompt = `You are a neutral, emotionally safe mediator for romantic partners.
+Tone: slow, warm, grounded, gentle, deeply validating. Use soft, simple sentences and short lines.
+Always create safety, validate both partners, slow the moment down, and make the situation feel workable.
+Focus on needs, vulnerability, and misunderstandings; guide them toward feeling on the same team.
+Never blame, escalate, pressure, diagnose, moralize, or suggest breaking up.
+Goal: emotional safety → clarity → understanding → reconnection.
 
-Be empathetic, non-judgmental, and focus on building connection.`;
+Return ONLY JSON with keys: summary, sharedTruths, positiveIntents, patterns, recommendations.
+- summary: a short neutral recount of the conflict (1–2 sentences, gentle tone)
+- sharedTruths: array of validating statements both might agree with
+- positiveIntents: { partnerA: string, partnerB: string } reframing each partner generously
+- patterns: array of gentle observations about dynamics
+- recommendations: array of short, calming next steps (no blame, no ultimatums).`;
 
     const userPrompt = `Partner A's perspective:
 ${JSON.stringify(partnerAResponses, null, 2)}
@@ -67,17 +73,20 @@ ${JSON.stringify(partnerAResponses, null, 2)}
 Partner B's perspective:
 ${JSON.stringify(partnerBResponses, null, 2)}
 
-Please analyze this conflict and provide:
-1. A summary of what happened from both perspectives
-2. Shared truths that both partners agree on
-3. Positive reframing of each partner's behavior
-4. Any patterns you notice
-5. Recommendations for moving forward
-
-Format your response as JSON with keys: summary, sharedTruths, positiveIntents, patterns, recommendations`;
+Please analyze this conflict and provide your response in this exact JSON format:
+{
+  "summary": "A single string summarizing the conflict from both perspectives",
+  "sharedTruths": ["array", "of", "strings"],
+  "positiveIntents": {
+    "partnerA": "positive reframing of Partner A's behavior as a string",
+    "partnerB": "positive reframing of Partner B's behavior as a string"
+  },
+  "patterns": ["array", "of", "pattern", "strings"],
+  "recommendations": ["array", "of", "recommendation", "strings"]
+}`;
 
     const response = await this.client.chat.completions.create({
-      model: 'gpt-4',
+      model: this.primaryModel,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: userPrompt },
@@ -111,7 +120,7 @@ Detect concerning language including:
 Respond with JSON containing: isCrisis (boolean), severity (low/medium/high), concerns (array), recommendation (string)`;
 
     const response = await this.client.chat.completions.create({
-      model: 'gpt-4',
+      model: this.fastModel,
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user', content: `Analyze this text for crisis indicators: "${text}"` },

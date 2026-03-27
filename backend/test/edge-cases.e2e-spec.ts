@@ -552,9 +552,9 @@ describe('Edge Cases & Error Handling (E2E)', () => {
         const { userA } = await createAuthenticatedCouple(app);
         const session = await createSession(app, userA.token);
 
-        // Start interview but don't complete it
-        const partialInterview = await request(app.getHttpServer())
-          .post(`/sessions/${session.id}/interview`)
+        // Save interview as draft (partial responses)
+        const draftInterview = await request(app.getHttpServer())
+          .patch(`/sessions/${session.id}/interview/draft`)
           .set('Authorization', `Bearer ${userA.token}`)
           .send({
             responses: [
@@ -562,13 +562,37 @@ describe('Edge Cases & Error Handling (E2E)', () => {
               { question: 'Q2', answer: 'A2' },
             ],
           })
+          .expect(200);
+
+        // Interview saved as draft (not marked complete)
+        expect(draftInterview.body.completedAt).toBeNull();
+
+        // User can retrieve their draft
+        const retrievedDraft = await request(app.getHttpServer())
+          .get(`/sessions/${session.id}/interview`)
+          .set('Authorization', `Bearer ${userA.token}`)
+          .expect(200);
+
+        expect(retrievedDraft.body.completedAt).toBeNull();
+        expect(retrievedDraft.body.responses).toEqual([
+          { question: 'Q1', answer: 'A1' },
+          { question: 'Q2', answer: 'A2' },
+        ]);
+
+        // User can continue and submit final interview
+        const finalInterview = await request(app.getHttpServer())
+          .post(`/sessions/${session.id}/interview`)
+          .set('Authorization', `Bearer ${userA.token}`)
+          .send({
+            responses: [
+              { question: 'Q1', answer: 'A1' },
+              { question: 'Q2', answer: 'A2' },
+              { question: 'Q3', answer: 'A3' }, // Added more responses
+            ],
+          })
           .expect(201);
 
-        // Interview saved even though not marked complete
-        expect(partialInterview.body.completedAt).toBeNull();
-
-        // TODO: Implement resume functionality
-        // User should be able to continue from where they left off
+        expect(finalInterview.body.completedAt).not.toBeNull();
       });
     });
 

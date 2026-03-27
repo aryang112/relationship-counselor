@@ -26,6 +26,7 @@ build/
 Thumbs.db
 
 # Frontend specific
+.expo/
 frontend/.expo/
 frontend/ios/
 frontend/android/
@@ -56,3 +57,6 @@ logs/
 # Temporary files
 *.tmp
 .cache/
+
+# Claude Code (user-specific agent memory)
+.claude/

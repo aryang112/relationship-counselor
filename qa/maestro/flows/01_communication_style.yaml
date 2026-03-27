@@ -1,0 +1,75 @@
+# Flow: CommunicationStyleScreen
+# Navigates from onboarding Splash through to the Communication Style screen.
+#
+# Prerequisites:
+#   - App is freshly installed or user is logged in but not onboarded
+#   - iOS Simulator is running with the app loaded via `npx expo start --ios`
+#
+# Navigation path:
+#   Splash → Promise → YourName → CommunicationStyle
+
+appId: com.relationcounselor.app
+---
+
+# Launch the app fresh
+- launchApp:
+    clearState: true
+
+# --- Splash Screen ---
+- assertVisible: "relate"
+- assertVisible: "Get Started"
+- takeScreenshot: 01_splash
+
+- tapOn: "Get Started"
+
+# --- Promise Screen ---
+- assertVisible: "both of you"
+- assertVisible: "Continue"
+- takeScreenshot: 01_promise
+
+- tapOn: "Continue"
+
+# --- YourName Screen ---
+- assertVisible: "What's your first name?"
+- tapOn: "Your name"
+- inputText: "TestUser"
+- takeScreenshot: 01_yourname
+
+- tapOn: "Next"
+
+# --- CommunicationStyle Screen (target) ---
+- assertVisible:
+    id: "screen-root"
+
+- assertVisible: "When you're upset, you tend to..."
+- assertVisible: "Select all that apply."
+- takeScreenshot: 01_communication_style_initial
+
+# Verify all pill options are visible
+- assertVisible: "I withdraw and go quiet"
+- assertVisible: "I need to talk it out immediately"
+- assertVisible: "I overthink and analyze everything"
+- assertVisible: "I get emotional and reactive"
+- assertVisible: "I avoid the topic entirely"
+
+# Verify Continue button exists but is disabled (no selection yet)
+- assertVisible: "Continue"
+- assertVisible: "Back"
+
+# Test pill selection interaction
+- tapOn:
+    id: "pill-withdraw"
+- takeScreenshot: 01_communication_style_one_selected
+
+- tapOn:
+    id: "pill-analyze"
+- takeScreenshot: 01_communication_style_two_selected
+
+# Verify Continue is still visible after selections
+- assertVisible: "Continue"
+
+# Scroll down to verify nothing is hidden
+- scrollDown
+- assertVisible: "Continue"
+- assertVisible: "Back"
+- takeScreenshot: 01_communication_style_scrolled

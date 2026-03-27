@@ -16,8 +16,16 @@
     "build": "npm run build --workspaces",
     "clean": "rm -rf node_modules backend/node_modules frontend/node_modules workers/node_modules shared/node_modules"
   },
+  "overrides": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
+  },
   "devDependencies": {
-    "prettier": "^3.0.0",
-    "eslint": "^8.50.0"
+    "eslint": "^8.50.0",
+    "prettier": "^3.0.0"
+  },
+  "dependencies": {
+    "react": "19.1.0",
+    "react-dom": "19.1.0"
   }
 }

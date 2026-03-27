@@ -3,6 +3,15 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { AppModule } from '../src/app.module';
 import { PrismaService } from '../src/prisma.service';
 import * as request from 'supertest';
+import {
+  NotificationsService,
+  NotificationPayload,
+} from '../src/modules/notifications/notifications.service';
+
+// Captures notification calls during tests
+export const notificationsServiceMock = {
+  sends: [] as any[],
+};
 
 /**
  * Create a test application instance
@@ -22,6 +31,19 @@ export async function createTestApp(): Promise<INestApplication> {
       transform: true,
     }),
   );
+
+  // Spy on NotificationsService.send to capture calls
+  const notificationsService = app.get<NotificationsService | undefined>(NotificationsService as any);
+  if (notificationsService && notificationsService.send) {
+    jest.spyOn(notificationsService, 'send').mockImplementation(async (payload: NotificationPayload) => {
+      notificationsServiceMock.sends.push(payload);
+      return {
+        queued: true,
+        payload,
+        channels: payload.channels ?? ['push'],
+      };
+    });
+  }
 
   await app.init();
 
@@ -134,6 +156,7 @@ export async function createSession(
  * Clean up Prisma connections
  */
 export async function closePrismaConnections(app: INestApplication) {
+  if (!app) return;
   const prisma = app.get(PrismaService);
   await prisma.$disconnect();
 }

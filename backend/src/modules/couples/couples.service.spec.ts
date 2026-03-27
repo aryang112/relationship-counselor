@@ -176,31 +176,122 @@ describe('CouplesService', () => {
   });
 
   describe('signAgreement', () => {
-    it('updates agreement when partner joined', async () => {
+    it('updates userASignedAt when user A signs', async () => {
       prisma.couple.findFirst.mockResolvedValueOnce({
         id: 'couple-id',
+        userAId: 'user-a',
         userBId: 'user-b',
-        agreementSignedAt: null,
+        userASignedAt: null,
+        userBSignedAt: null,
       });
       prisma.couple.update.mockResolvedValueOnce({
         id: 'couple-id',
-        agreementSignedAt: new Date(),
+        userAId: 'user-a',
+        userBId: 'user-b',
+        userASignedAt: new Date(),
+        userBSignedAt: null,
       });
 
       await service.signAgreement('user-a');
 
-      expect(prisma.couple.update).toHaveBeenCalled();
+      expect(prisma.couple.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'couple-id' },
+          data: { userASignedAt: expect.any(Date) },
+        }),
+      );
+    });
+
+    it('updates userBSignedAt when user B signs', async () => {
+      prisma.couple.findFirst.mockResolvedValueOnce({
+        id: 'couple-id',
+        userAId: 'user-a',
+        userBId: 'user-b',
+        userASignedAt: null,
+        userBSignedAt: null,
+      });
+      prisma.couple.update.mockResolvedValueOnce({
+        id: 'couple-id',
+        userAId: 'user-a',
+        userBId: 'user-b',
+        userASignedAt: null,
+        userBSignedAt: new Date(),
+      });
+
+      await service.signAgreement('user-b');
+
+      expect(prisma.couple.update).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: 'couple-id' },
+          data: { userBSignedAt: expect.any(Date) },
+        }),
+      );
+    });
+
+    it('returns existing couple if user already signed', async () => {
+      const alreadySignedCouple = {
+        id: 'couple-id',
+        userAId: 'user-a',
+        userBId: 'user-b',
+        userASignedAt: new Date(),
+        userBSignedAt: null,
+      };
+      prisma.couple.findFirst.mockResolvedValueOnce(alreadySignedCouple);
+
+      const result = await service.signAgreement('user-a');
+
+      expect(prisma.couple.update).not.toHaveBeenCalled();
+      expect(result).toEqual(alreadySignedCouple);
     });
 
     it('throws when partner not joined yet', async () => {
       prisma.couple.findFirst.mockResolvedValueOnce({
         id: 'couple-id',
+        userAId: 'user-a',
         userBId: null,
       });
 
       await expect(service.signAgreement('user-a')).rejects.toBeInstanceOf(
         ConflictException,
       );
+    });
+  });
+
+  describe('bothPartnersSignedAgreement', () => {
+    it('returns true when both partners have signed', () => {
+      const couple = {
+        userASignedAt: new Date(),
+        userBSignedAt: new Date(),
+      };
+
+      expect(service.bothPartnersSignedAgreement(couple)).toBe(true);
+    });
+
+    it('returns false when only user A signed', () => {
+      const couple = {
+        userASignedAt: new Date(),
+        userBSignedAt: null,
+      };
+
+      expect(service.bothPartnersSignedAgreement(couple)).toBe(false);
+    });
+
+    it('returns false when only user B signed', () => {
+      const couple = {
+        userASignedAt: null,
+        userBSignedAt: new Date(),
+      };
+
+      expect(service.bothPartnersSignedAgreement(couple)).toBe(false);
+    });
+
+    it('returns false when neither has signed', () => {
+      const couple = {
+        userASignedAt: null,
+        userBSignedAt: null,
+      };
+
+      expect(service.bothPartnersSignedAgreement(couple)).toBe(false);
     });
   });
 });
