@@ -2,7 +2,7 @@
 
 > Maps every significant file/module with its purpose, exports, and dependencies.
 > Agents read this FIRST instead of scanning the entire codebase.
-> Last updated: 2026-03-22
+> Last updated: 2026-03-28
 
 ---
 
@@ -29,12 +29,16 @@ relate/
 │   │   ├── navigation/         # React Navigation (MainNavigator, OnboardingNavigator)
 │   │   ├── screens/            # All screens organized by feature
 │   │   ├── services/           # API service functions
-│   │   ├── store/              # Zustand stores (auth, session, ui, onboarding)
+│   │   ├── store/              # Zustand stores (auth, session, ui, onboarding, subscription)
 │   │   ├── theme/              # Design system (colors, typography, spacing, shadows)
-│   │   ├── types/              # TypeScript type definitions
+│   │   ├── types/              # TypeScript type definitions (+ subscription.ts)
 │   │   └── utils/              # Utilities (haptics, format, validation)
+│   ├── ios/
+│   │   └── RelationCounselor/
+│   │       └── PrivacyInfo.xcprivacy  # Apple privacy manifest
 │   └── App.tsx                 # Root component
 ├── workers/                    # BullMQ processors (unpacking, interview, crisis)
+├── privacy_labels_inventory.json  # Apple App Privacy nutrition labels data
 ├── AGENT_HANDBOOK.md           # Comprehensive project reference (READ FIRST)
 ├── AgentInstructions.md        # Agent workflow rules
 ├── state.md                    # Working memory (append-only, current status)
@@ -42,7 +46,8 @@ relate/
 │   ├── lessons.md              # Learnings from corrections
 │   └── todo.md                 # Task plans with checkable items
 └── docs/
-    └── CODEMAP.md              # This file
+    ├── CODEMAP.md              # This file
+    └── APP_STORE_REVIEW.md     # Apple reviewer demo credentials + instructions
 ```
 
 ---
@@ -81,7 +86,10 @@ abandoned → []
 | `notifyPartnerAStarted()` | Notifies initiator when Partner B begins |
 | `remindPartnerToParticipate()` | Manual reminder (12h cooldown) |
 | `getUnpacking()` / `setUnpackingChoice()` / `unlockUnpacking()` | Unpacking lock system |
-| `submitUnpackingFeedback()` | Regeneration with feedback context |
+| `submitUnpackingFeedback()` | Records feedback, enqueues regeneration (or falls back to inline) |
+| `regenerateUnpackingInline()` | Feedback-aware inline regeneration when Redis unavailable |
+| `detectCrisisInline()` | Inline crisis language detection on interview submit (emails resources if severe) |
+| `getPastSessionContext()` | Fetches last 5 resolved sessions' insights + commitments for AI memory |
 
 ### `backend/src/modules/sessions/sessions.controller.ts` (~159 lines)
 **Purpose:** REST API endpoints for sessions.
@@ -113,7 +121,7 @@ abandoned → []
 |--------|-------------|
 | `generateNextQuestion(history, gender?)` | Gender-aware follow-up question from conversation history |
 | `generateNextQuestionWithContext(history, context, gender?)` | Context-aware + gender-aware questions for Partner B |
-| `buildSystemPrompt(gender)` | Builds system prompt with gender-specific tone block (male/female/neutral) |
+| `buildSystemPrompt(gender, pastContext?)` | Builds system prompt with gender tone block + optional past session context |
 | `extractPartnerAContext()` | Extracts topicTag, issues, needs, emotions from Partner A responses |
 
 ### `backend/src/auth/auth.controller.ts` + `auth.service.ts`
@@ -129,10 +137,16 @@ abandoned → []
 | GET | `/auth/consent-status` | getConsentStatus |
 | POST | `/auth/ai-consent` | recordAiConsent (Apple 5.1.2(i)) |
 | DELETE | `/auth/account` | deleteAccount (cascading soft-delete) |
+| GET | `/auth/subscription` | getSubscriptionStatus (tier, expiry, session count) |
+| POST | `/auth/subscription/verify` | verifySubscription (premium or resolve_now) |
+| POST | `/auth/subscription/restore` | restoreSubscription (check active subs) |
 
-### `backend/scripts/seed-demo.ts`
-**Purpose:** Demo seed for App Store review. Creates 2 users, couple, completed session.
+**Subscription model:** Free tier = 2 resolved sessions. Premium = $14.99/month unlimited. Resolve Now = $2.99 one-time (decrements resolvedSessionCount by 1). Paywall gate in `startSession()` throws 402 ForbiddenException when free limit reached.
+
+### `backend/prisma/seed-demo.ts`
+**Purpose:** Demo seed for App Store review. Creates 2 demo accounts with a completed session.
 **Usage:** `cd backend && npm run seed:demo`
+**Credentials:** `demo-partner-a@relatehq.com` / `demo-partner-b@relatehq.com` / `ReviewDemo2026`
 **Credentials:** `demo-alex@relate.app` / `demo-jordan@relate.app` (DemoPass123!)
 
 ---
@@ -142,14 +156,14 @@ abandoned → []
 ### Navigation
 - **`RootNavigator.tsx`**: Top-level gate. `!onboardingDone` → OnboardingNavigator (quiz-first), `!isAuthenticated && onboardingDone` → AuthNavigator, `isAuthenticated && onboardingDone` → MainNavigator
 - **`OnboardingNavigator.tsx`**: De-escalation-focused flow. Splash → Promise → YourName → CommunicationStyle → ConflictFeelings → PartnerDetails (4 sub-steps) → ConflictPreferences → CreateAccount → Consent → InvitePartner → ... → Tutorial. 5 quiz screens (all selection-based) before signup. CreateAccount/Login embedded inline.
-- **`MainNavigator.tsx`** (~200 lines): Stack + bottom tabs. Screens: HomeTabs, SessionDetail, StartSession, StartMediation, PreSessionReminder, WaitingForPartner, **PartnerBEntry**, Interview, InterviewComplete, UnpackingChoice, Unpacking, Reconnection, Commitments, Settings, **DeleteAccount**, Profile, UsProfile, LoveBank, LearningsHistory
+- **`MainNavigator.tsx`** (~200 lines): Stack + bottom tabs. Screens: HomeTabs, SessionDetail, StartSession, StartMediation, PreSessionReminder, WaitingForPartner, **PartnerBEntry**, Interview, InterviewComplete, UnpackingChoice, Unpacking, Reconnection, Commitments, Settings, **DeleteAccount**, Profile, UsProfile, LoveBank, LearningsHistory, **Paywall**
 
 ### Screens — Session Flow
 - **`PartnerBEntryScreen.tsx`** (209 lines, NEW): Partner B invite screen with topic tag, privacy note, CTA, snooze
-- **`InterviewScreen.tsx`** (~353 lines): Pi-style chat interface for private vent. Accepts optional `partnerBOpeningMessage`
+- **`InterviewScreen.tsx`** (~353 lines): Pi-style chat interface for private vent. Accepts optional `partnerBOpeningMessage`. Emotion pills after 2nd response. Crisis modal on detection.
 - **`StartMediationScreen.tsx`**: Session creation entry point
 - **`PreSessionReminderScreen.tsx`**: Safety reminder before interview
-- **`WaitingForPartnerScreen.tsx`**: Partner A waiting state
+- **`WaitingForPartnerScreen.tsx`**: Partner A waiting state. Polls session status every 5s, auto-navigates to UnpackingChoice when partner finishes.
 - **`SessionDetailScreen.tsx`**: Session overview with status labels
 
 ### Components — Domain
@@ -157,8 +171,11 @@ abandoned → []
 - **`LegalDocumentModal.tsx`**: Full-screen ToS/Privacy Policy display. References Anthropic (not OpenAI).
 - **`CrisisResourcesModal.tsx`**: 4 crisis hotlines + therapist finder.
 
+### Screens — Subscription
+- **`PaywallScreen.tsx`** (NEW): Paywall with Premium ($14.99/mo) + Resolve Now ($2.99) options. Restore Purchases button. ToS/Privacy links. RevenueCat IAP integration via useSubscription hook.
+
 ### Screens — Settings
-- **`SettingsScreen.tsx`**: Settings with Privacy section (Privacy Policy, ToS, AI Data Processing, Delete Account) + About section (Crisis Resources, Contact Support, About Relate). Opens LegalDocumentModal and CrisisResourcesModal.
+- **`SettingsScreen.tsx`**: Settings with Subscription section (Manage, Restore Purchases) + Privacy section (Privacy Policy, ToS, AI Data Processing, Delete Account) + About section (Crisis Resources, Contact Support, About Relate).
 - **`DeleteAccountScreen.tsx`** (NEW): Destructive account deletion with warning card, optional reason, confirmation Alert, cascading cleanup (SecureStore + API + auth reset).
 
 ### Screens — Dashboard
@@ -166,6 +183,8 @@ abandoned → []
 
 ### Hooks
 - **`useInterview.ts`** (~248 lines): Chat state machine. Manages messages, auto-save drafts, AI follow-up questions, completion. Accepts optional `partnerBOpeningMessage` for custom first message.
+- **`useUnpacking.ts`**: Unpacking state management. Handles lock/unlock, choice, feedback submission, **regeneration polling** (3s interval, 10 attempts, detects `updatedAt` change). Returns `isRegenerating` for UI loading state.
+- **`useSubscription.ts`** (NEW): RevenueCat SDK wrapper. Initialize, fetchStatus, purchaseSubscription, purchaseSingleSession, restorePurchases. needsPaywall/isPremium computed from subscriptionStore.
 - **`useSession.ts`**: Session list hook (`useSessionList`)
 - **`useAuth.ts`**: Auth flow hook
 

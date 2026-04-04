@@ -8,84 +8,22 @@
  * Animation: Logo and tagline fade in with a gentle upward slide.
  */
 
-import React, { useEffect } from 'react';
-import { View, Text, StyleSheet, Dimensions } from 'react-native';
+import React from 'react';
+import { View, Text, StyleSheet } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withTiming,
-  withDelay,
-  Easing,
-} from 'react-native-reanimated';
+import Animated, { FadeIn, FadeInUp } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button } from '../../components/ui/Button';
 import { colors, fontFamilies, spacing } from '../../theme';
 
-const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-
 interface SplashScreenProps {
   onGetStarted: () => void;
   onHaveCode: () => void;
+  onSignIn?: () => void;
 }
 
-export function SplashScreen({ onGetStarted, onHaveCode }: SplashScreenProps) {
+export function SplashScreen({ onGetStarted, onHaveCode, onSignIn }: SplashScreenProps) {
   const insets = useSafeAreaInsets();
-
-  // Animation values
-  const logoOpacity = useSharedValue(0);
-  const logoTranslateY = useSharedValue(20);
-  const taglineOpacity = useSharedValue(0);
-  const taglineTranslateY = useSharedValue(16);
-  const buttonsOpacity = useSharedValue(0);
-  const buttonsTranslateY = useSharedValue(24);
-
-  useEffect(() => {
-    // Logo fades in first
-    logoOpacity.value = withDelay(
-      400,
-      withTiming(1, { duration: 800, easing: Easing.out(Easing.cubic) }),
-    );
-    logoTranslateY.value = withDelay(
-      400,
-      withTiming(0, { duration: 800, easing: Easing.out(Easing.cubic) }),
-    );
-
-    // Tagline follows
-    taglineOpacity.value = withDelay(
-      900,
-      withTiming(1, { duration: 700, easing: Easing.out(Easing.cubic) }),
-    );
-    taglineTranslateY.value = withDelay(
-      900,
-      withTiming(0, { duration: 700, easing: Easing.out(Easing.cubic) }),
-    );
-
-    // Buttons last
-    buttonsOpacity.value = withDelay(
-      1400,
-      withTiming(1, { duration: 600, easing: Easing.out(Easing.cubic) }),
-    );
-    buttonsTranslateY.value = withDelay(
-      1400,
-      withTiming(0, { duration: 600, easing: Easing.out(Easing.cubic) }),
-    );
-  }, []);
-
-  const logoStyle = useAnimatedStyle(() => ({
-    opacity: logoOpacity.value,
-    transform: [{ translateY: logoTranslateY.value }],
-  }));
-
-  const taglineStyle = useAnimatedStyle(() => ({
-    opacity: taglineOpacity.value,
-    transform: [{ translateY: taglineTranslateY.value }],
-  }));
-
-  const buttonsStyle = useAnimatedStyle(() => ({
-    opacity: buttonsOpacity.value,
-    transform: [{ translateY: buttonsTranslateY.value }],
-  }));
 
   return (
     <LinearGradient
@@ -99,21 +37,25 @@ export function SplashScreen({ onGetStarted, onHaveCode }: SplashScreenProps) {
 
       {/* Center content */}
       <View style={styles.centerContent}>
-        <Animated.View style={logoStyle}>
-          <Text style={styles.logo}>relate</Text>
+        <Animated.View entering={FadeIn.duration(600)}>
+          <Text style={styles.logo} accessibilityRole="header">relate</Text>
         </Animated.View>
 
-        <Animated.View style={taglineStyle}>
+        <Animated.View entering={FadeIn.duration(600).delay(200)}>
           <Text style={styles.tagline}>finally understand each other</Text>
+        </Animated.View>
+
+        <Animated.View entering={FadeIn.duration(600).delay(350)}>
+          <Text style={styles.disclaimer}>An AI mediation tool — not a licensed therapist.</Text>
         </Animated.View>
       </View>
 
       {/* Bottom actions */}
       <Animated.View
+        entering={FadeInUp.duration(600).delay(400).springify().damping(15)}
         style={[
           styles.actions,
           { paddingBottom: insets.bottom + spacing.lg },
-          buttonsStyle,
         ]}
       >
         <Button
@@ -125,10 +67,16 @@ export function SplashScreen({ onGetStarted, onHaveCode }: SplashScreenProps) {
           textStyle={styles.getStartedText}
         />
         <Button
+          title="Sign In"
+          onPress={onSignIn || onHaveCode}
+          variant="ghost"
+          textStyle={styles.ghostText}
+        />
+        <Button
           title="I have a partner code"
           onPress={onHaveCode}
           variant="ghost"
-          textStyle={styles.ghostText}
+          textStyle={styles.partnerCodeText}
         />
       </Animated.View>
     </LinearGradient>
@@ -160,6 +108,12 @@ const styles = StyleSheet.create({
     color: 'rgba(255, 255, 255, 0.8)',
     marginTop: spacing.sm,
   },
+  disclaimer: {
+    fontFamily: fontFamilies.body,
+    fontSize: 12,
+    color: 'rgba(255, 255, 255, 0.6)',
+    marginTop: spacing.sm,
+  },
   actions: {
     paddingHorizontal: spacing.lg,
   },
@@ -171,5 +125,9 @@ const styles = StyleSheet.create({
   },
   ghostText: {
     color: 'rgba(255, 255, 255, 0.85)',
+  },
+  partnerCodeText: {
+    color: 'rgba(255, 255, 255, 0.5)',
+    fontSize: 13,
   },
 });

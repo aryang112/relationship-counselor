@@ -39,6 +39,7 @@ import { signAgreement } from '../../services/auth';
 import { colors, typography, fontFamilies, spacing, radius, shadows } from '../../theme';
 import { useUIStore } from '../../store/uiStore';
 import { useAuthStore } from '../../store/authStore';
+import { useSubscription } from '../../hooks/useSubscription';
 import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
 
 type Navigation = NativeStackNavigationProp<MainNavigatorParamList>;
@@ -75,6 +76,7 @@ export function StartMediationScreen() {
   const addToast = useUIStore((s) => s.addToast);
   const user = useAuthStore((s) => s.user);
   const couple = useAuthStore((s) => s.couple);
+  const { needsPaywall } = useSubscription();
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [signing, setSigning] = useState(false);
@@ -107,6 +109,10 @@ export function StartMediationScreen() {
 
   /** Handle starting a mediation session */
   const handleStart = useCallback(async () => {
+    if (needsPaywall) {
+      navigation.navigate('Paywall');
+      return;
+    }
     setLoading(true);
     try {
       const session = await createSession({});
@@ -120,7 +126,7 @@ export function StartMediationScreen() {
     } finally {
       setLoading(false);
     }
-  }, [addToast, navigation]);
+  }, [addToast, navigation, needsPaywall]);
 
   /** Render the agreement signing card when current user hasn't signed */
   const renderSigningCard = () => (
@@ -292,8 +298,7 @@ export function StartMediationScreen() {
 
           {/* Conditional content based on agreement signing status */}
           {!currentUserSigned && renderSigningCard()}
-          {currentUserSigned && !partnerSigned && renderWaitingForPartner()}
-          {bothSigned && renderReadyToStart()}
+          {currentUserSigned && renderReadyToStart()}
         </ScrollView>
       </SafeArea>
     </LinearGradient>

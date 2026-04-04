@@ -8,6 +8,28 @@ export interface UnpackingJobData {
   partnerBInterviewId: string;
   partnerAResponses: Record<string, any>;
   partnerBResponses: Record<string, any>;
+  pastContext?: string;
+}
+
+/**
+ * Job data for regenerating unpacking insights based on user feedback.
+ * Sent by the backend when a user submits feedback on an existing unpacking.
+ */
+export interface RegenerateUnpackingJobData {
+  sessionId: string;
+  unpackingId: string;
+  feedbackReason: 'missed_core_issue' | 'inaccurate_partner_perspective' | 'too_generic' | 'other';
+  feedbackText: string | undefined;
+  previousUnpacking: {
+    surfaceConflict: string;
+    partnerAExperience: string;
+    partnerBExperience: string;
+    sharedTruths: any;
+    deeperInsight: string;
+    patternRecognition: string | null;
+  };
+  partnerAResponses: Record<string, any>;
+  partnerBResponses: Record<string, any>;
 }
 
 export interface UnpackingJobResult {
@@ -17,6 +39,11 @@ export interface UnpackingJobResult {
     partnerA: string;
     partnerB: string;
   };
+  underlyingNeeds: {
+    partnerA: string;
+    partnerB: string;
+  };
+  breakthrough: string;
   patterns: string[];
   recommendations: string[];
 }

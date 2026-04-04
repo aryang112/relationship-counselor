@@ -17,7 +17,8 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.relationcounselor.app",
       "infoPlist": {
-        "NSMicrophoneUsageDescription": "We need microphone access so you can record voice responses during your interview."
+        "NSMicrophoneUsageDescription": "Relate uses your microphone so you can speak your feelings aloud instead of typing during a difficult moment. Voice input is optional — you can always type instead.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
@@ -27,7 +28,9 @@
       },
       "package": "com.relationcounselor.app",
       "permissions": [
-        "RECORD_AUDIO"
+        "RECORD_AUDIO",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
       ],
       "edgeToEdgeEnabled": true
     },
@@ -40,15 +43,16 @@
         "expo-notifications",
         {
           "icon": "./assets/icon.png",
-          "color": "#6366F1"
+          "color": "#E07832"
         }
       ],
       "expo-audio"
     ],
     "extra": {
       "eas": {
-        "projectId": "your-eas-project-id"
+        "projectId": "a82698ed-d0a0-43fc-a29a-aa372e1422ac"
       }
-    }
+    },
+    "owner": "aryangupta074"
   }
 }

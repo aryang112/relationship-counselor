@@ -73,10 +73,9 @@ export function InvitePartnerScreen({
 
   const handleShare = useCallback(async () => {
     if (!inviteToken) return;
-    const inviteLink = `relationcounselor://invite/${inviteToken}`;
     try {
       await Share.share({
-        message: `Hey babe, I care about us so I signed up for Relate \u2014 an app that helps couples understand each other better.\n\nI\u2019d love for you to join me:\n${inviteLink}\n\nInvite code: ${inviteToken}`,
+        message: `Hey, I signed up for Relate \u2014 an app that helps couples understand each other better.\n\nJoin me with this code: ${inviteToken}`,
       });
       successTap();
     } catch {
@@ -204,9 +203,9 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   tokenValue: {
-    fontSize: 18,
+    fontSize: 36,
     fontWeight: '700',
-    letterSpacing: 1,
+    letterSpacing: 8,
   },
   waitingCard: {
     marginTop: 16,

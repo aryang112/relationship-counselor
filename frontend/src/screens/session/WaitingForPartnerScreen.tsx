@@ -15,7 +15,7 @@
  * when the partner has not yet finished.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -25,26 +25,71 @@ import {
   Pressable,
 } from 'react-native';
 import { LinearGradient } from 'expo-linear-gradient';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import type { RouteProp } from '@react-navigation/native';
 import { ArrowLeft, Clock } from 'lucide-react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { colors, fontFamilies, spacing, radius } from '../../theme';
 import { useAuthStore } from '../../store/authStore';
 import { getGenderCopy } from '../../utils/genderCopy';
+import { getSessionStatus } from '../../services/sessions';
 import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
 
 type Navigation = NativeStackNavigationProp<MainNavigatorParamList>;
+type WaitingRoute = RouteProp<MainNavigatorParamList, 'WaitingForPartner'>;
 
 /** ETA text */
 const ETA_TEXT = 'Usually takes 5\u201315 minutes';
 
 export function WaitingForPartnerScreen() {
   const navigation = useNavigation<Navigation>();
+  const route = useRoute<WaitingRoute>();
+  const sessionId = route.params?.sessionId;
   const couple = useAuthStore((s) => s.couple);
   const user = useAuthStore((s) => s.user);
   const copy = getGenderCopy(user?.gender);
   const partnerName = couple?.userB?.name?.split(' ')[0] || 'Your partner';
+
+  // ── Partner finished state ──
+  const [partnerFinished, setPartnerFinished] = useState(false);
+
+  // ── Poll session status for unpacking_ready ──
+  const pollIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const navigateTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cleanupPolling = useCallback(() => {
+    if (pollIntervalRef.current) {
+      clearInterval(pollIntervalRef.current);
+      pollIntervalRef.current = null;
+    }
+    if (navigateTimeoutRef.current) {
+      clearTimeout(navigateTimeoutRef.current);
+      navigateTimeoutRef.current = null;
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!sessionId) return;
+
+    pollIntervalRef.current = setInterval(async () => {
+      try {
+        const { status } = await getSessionStatus(sessionId);
+        if (status === 'unpacking_ready') {
+          cleanupPolling();
+          setPartnerFinished(true);
+          // Brief delay to show "partner finished" message before navigating
+          navigateTimeoutRef.current = setTimeout(() => {
+            navigation.replace('UnpackingChoice', { sessionId });
+          }, 1500);
+        }
+      } catch {
+        // Silently ignore polling errors — will retry next interval
+      }
+    }, 5000);
+
+    return cleanupPolling;
+  }, [sessionId, navigation, cleanupPolling]);
 
   // ── Breathing circle animation ──
   const breatheAnim = useRef(new Animated.Value(1)).current;
@@ -160,7 +205,9 @@ export function WaitingForPartnerScreen() {
               Breathe.
             </Text>
             <Text style={styles.subText}>
-              {partnerName} is sharing their side.
+              {partnerFinished
+                ? `${partnerName} just finished!`
+                : `${partnerName} is sharing their side.`}
             </Text>
 
             {/* Affirmation card */}

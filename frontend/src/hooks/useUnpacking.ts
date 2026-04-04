@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   getUnpacking,
   setUnpackingChoice,
@@ -24,9 +24,15 @@ interface UnpackingReadyState {
 
 type UnpackingState = UnpackingLockedState | UnpackingReadyState;
 
+/**
+ * Return type for the useUnpacking hook.
+ * Includes `isRegenerating` to indicate background polling after feedback submission.
+ */
 interface UseUnpackingReturn {
   isLoading: boolean;
   isMutating: boolean;
+  /** True while polling for updated unpacking after feedback submission. */
+  isRegenerating: boolean;
   error: string | null;
   state: UnpackingState | null;
   unpacking: Unpacking | null;
@@ -61,14 +67,28 @@ function normalizeUnpackingResponse(payload: unknown): UnpackingState {
 export function useUnpacking(sessionId: string): UseUnpackingReturn {
   const [isLoading, setIsLoading] = useState(true);
   const [isMutating, setIsMutating] = useState(false);
+  const [isRegenerating, setIsRegenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [state, setState] = useState<UnpackingState | null>(null);
+
+  /** Ref to track active polling interval so it can be cleaned up on unmount. */
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const pollingAttemptsRef = useRef(0);
 
   const refresh = useCallback(async () => {
     setError(null);
     const response = await getUnpacking(sessionId);
     setState(normalizeUnpackingResponse(response));
   }, [sessionId]);
+
+  /** Stop any active regeneration polling. */
+  const stopPolling = useCallback(() => {
+    if (pollingRef.current) {
+      clearInterval(pollingRef.current);
+      pollingRef.current = null;
+    }
+    pollingAttemptsRef.current = 0;
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -97,6 +117,13 @@ export function useUnpacking(sessionId: string): UseUnpackingReturn {
       mounted = false;
     };
   }, [sessionId]);
+
+  /** Clean up polling on unmount. */
+  useEffect(() => {
+    return () => {
+      stopPolling();
+    };
+  }, [stopPolling]);
 
   const chooseWait = useCallback(async () => {
     setIsMutating(true);
@@ -140,22 +167,69 @@ export function useUnpacking(sessionId: string): UseUnpackingReturn {
     }
   }, [refresh, sessionId]);
 
+  /**
+   * Submit feedback and begin background polling for regenerated unpacking.
+   * The polling runs asynchronously — the promise resolves as soon as the
+   * API call succeeds, so the caller can close modals / show toasts immediately.
+   */
   const sendFeedback = useCallback(
     async (payload: SubmitFeedbackRequest) => {
       setIsMutating(true);
       setError(null);
+
+      // Capture the current updatedAt before submitting feedback
+      const previousUpdatedAt = state && !state.locked
+        ? (state as UnpackingReadyState).unpacking?.updatedAt
+        : undefined;
+
       try {
         await submitFeedback(sessionId, payload);
-        await refresh();
       } catch (err: any) {
         const message = err?.response?.data?.message;
         setError(Array.isArray(message) ? message[0] : message || 'Could not submit feedback.');
-        throw err;
-      } finally {
         setIsMutating(false);
+        throw err;
       }
+
+      setIsMutating(false);
+      setIsRegenerating(true);
+
+      // Stop any existing polling before starting a new one
+      stopPolling();
+      pollingAttemptsRef.current = 0;
+
+      const MAX_ATTEMPTS = 10;
+      const POLL_INTERVAL_MS = 3000;
+
+      pollingRef.current = setInterval(async () => {
+        pollingAttemptsRef.current += 1;
+
+        try {
+          const response = await getUnpacking(sessionId);
+          const normalized = normalizeUnpackingResponse(response);
+
+          if (!normalized.locked) {
+            const newUpdatedAt = (normalized as UnpackingReadyState).unpacking?.updatedAt;
+            if (newUpdatedAt && newUpdatedAt !== previousUpdatedAt) {
+              // New data arrived — update state and stop polling
+              setState(normalized);
+              setIsRegenerating(false);
+              stopPolling();
+              return;
+            }
+          }
+        } catch {
+          // Ignore poll errors — we'll retry on the next interval
+        }
+
+        if (pollingAttemptsRef.current >= MAX_ATTEMPTS) {
+          // Timeout — stop gracefully
+          setIsRegenerating(false);
+          stopPolling();
+        }
+      }, POLL_INTERVAL_MS);
     },
-    [refresh, sessionId],
+    [sessionId, state, stopPolling],
   );
 
   const unpacking = useMemo(() => {
@@ -168,6 +242,7 @@ export function useUnpacking(sessionId: string): UseUnpackingReturn {
   return {
     isLoading,
     isMutating,
+    isRegenerating,
     error,
     state,
     unpacking,

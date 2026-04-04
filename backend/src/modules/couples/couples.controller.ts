@@ -2,9 +2,11 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   HttpCode,
   HttpStatus,
+  Param,
   Post,
   Request,
   Res,
@@ -83,5 +85,48 @@ export class CouplesController {
     }
 
     return this.couplesService.signAgreement(req.user.id);
+  }
+
+  // ─── Love Bank ───────────────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Get('love-bank')
+  async getLoveBank(@Request() req) {
+    return this.couplesService.getLoveBank(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('love-bank')
+  @HttpCode(HttpStatus.CREATED)
+  async addLoveBankEntry(@Request() req, @Body() body: { text: string }) {
+    if (!body.text?.trim()) {
+      throw new BadRequestException('Text is required');
+    }
+    return this.couplesService.addLoveBankEntry(req.user.id, body.text.trim());
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Delete('love-bank/:entryId')
+  async deleteLoveBankEntry(
+    @Request() req,
+    @Param('entryId') entryId: string,
+  ) {
+    return this.couplesService.deleteLoveBankEntry(req.user.id, entryId);
+  }
+
+  // ─── Couple Stats ────────────────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Get('stats')
+  async getCoupleStats(@Request() req) {
+    return this.couplesService.getCoupleStats(req.user.id);
+  }
+
+  // ─── Learnings / Commitments ─────────────────────────────────────
+
+  @UseGuards(JwtAuthGuard)
+  @Get('learnings')
+  async getLearnings(@Request() req) {
+    return this.couplesService.getLearnings(req.user.id);
   }
 }

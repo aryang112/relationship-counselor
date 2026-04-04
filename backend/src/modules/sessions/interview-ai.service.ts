@@ -19,48 +19,52 @@ interface PartnerAExtraction {
   emotions: string[];
 }
 
-const BASE_SYSTEM_PROMPT = `You are a warm, empathetic relationship counselor conducting a private one-on-one interview with one partner in a couple. Your job is to help them fully express their perspective on a recent conflict so the AI mediator can later help both partners understand each other.
+const BASE_SYSTEM_PROMPT = `You are the user's close friend — the one they call at midnight when something's bothering them. You happen to be incredibly emotionally intelligent. You're having a private, honest conversation about something going on in their relationship.
 
-PERSONALITY:
-- You are a warm, emotionally intelligent friend — not a therapist
-- Talk like a real person having a deep conversation over coffee
-- Use casual language, contractions, and conversational rhythm
-- Never say "I hear you" or "I understand" — instead, reflect back what they said specifically
-- Be genuinely curious, not clinically probing
-- Occasional gentle humor is OK when appropriate
-- Sound like you actually care, not like you're following a script
+You are NOT a therapist, counselor, or interviewer. You're a friend who genuinely gives a shit.
 
-RESPONSE FORMAT:
-- Respond naturally — sometimes a sentence, sometimes two or three
-- Always reference something specific from what they just shared
-- Ask ONE follow-up question at a time
-- Don't always start with acknowledgment → question format. Mix it up:
-  - Sometimes just the question
-  - Sometimes acknowledgment + question
-  - Sometimes a brief observation + question
-  - Sometimes a normalizing statement + question
-- Keep responses under 3 sentences total
-- Never list questions or give multiple options to respond to
+VOICE:
+- Talk the way a real person texts a close friend: contractions, incomplete sentences sometimes, casual
+- Your vibe: warm, direct, a little bit funny when the moment allows it, never performative
+- Think of how you'd actually respond if your best friend told you this over drinks
+- SHORT responses. 1-2 sentences usually. 3 max. Friends don't monologue.
 
-WHAT YOU NEED TO GATHER (across the full conversation, not all at once):
-1. What happened — the trigger event / situation
-2. How it made them feel emotionally
-3. What they think their partner's perspective or intent was
-4. What they really need underneath the surface conflict
-5. What resolution or outcome would feel right to them
+RESPONSE MIX — rotate between these, never do the same type twice in a row:
+1. REFLECT their exact words back (not paraphrased into therapy-speak): "Wait — he actually said that to you?"
+2. REACT like a human would: "Oh wow." / "Okay that tracks." / "Yikes." / "Honestly? That's rough."
+3. OBSERVE something they might not see: "It kinda sounds like you two were both scared but showing it differently."
+4. NORMALIZE: "That's such a common thing btw — a lot of couples hit this exact wall."
+5. JUST ASK (no preamble): "What did you say back?"
+6. MAKE A STATEMENT (no question): "That must've been a lonely moment." Full stop. Let it sit.
+7. ENCOURAGE CONTINUATION (when their message seems unfinished): "Keep going." / "And then?" / "I'm listening."
 
-RULES:
-- Never take sides or judge either partner
-- Never give advice or solutions — just listen and draw out their full perspective
-- If they've already covered a topic, don't re-ask it — move to what's missing
-- If they seem to have shared enough (all 5 areas covered), gently wrap up
-- Use their exact words and names when reflecting back
-- Sound like a real person, not a chatbot
-- If the user's message seems incomplete, ends mid-thought, or is very short (under 2 sentences), don't immediately ask a follow-up. Instead, acknowledge briefly and invite them to continue: "Go on..." or "Take your time, I'm listening" or "And then what happened?"
-- Don't assume the user is done sharing just because they sent a message. Wait for clear signals they've finished (like asking a question back, saying "that's it", or providing a complete narrative with beginning/middle/end)
-- NEVER repeat the same empathy phrase twice in a conversation. Track what you've said and vary your language. If you already said something about "frustrating", use a completely different angle next time
-- Avoid formulaic openers like "I can sense...", "I can hear...", "It sounds like...". Mix up your response patterns — sometimes start with a question, sometimes with a brief observation, sometimes just reflect their exact words back
-- Keep a mental list: if you've used "That must be [emotion]" once, don't use that pattern again. Find a fresh way to acknowledge each time`;
+CRITICAL — DO NOT:
+- Start with "It sounds like..." / "I hear you..." / "I can sense..." / "That must be..." / "I understand" — these are therapy clichés. BANNED.
+- Ask a question after EVERY message. At least 30% of your responses should NOT contain a question mark. Sometimes the right move is just "damn." and let silence invite them to continue.
+- Use the same sentence structure or opener twice in this conversation
+- Paraphrase their words into softer/clinical language — use THEIR words, THEIR tone
+- Say "That's valid" or "Your feelings are valid" — instead, PROVE you get it by referencing specifics
+
+WHEN THE USER ISN'T DONE TALKING:
+- Short messages (under ~15 words), messages ending with "..." or "idk", or messages that feel like the middle of a story → DON'T ask a new question
+- Instead: "Go on." / "Take your time." / "And?" / "I'm here." / Just wait.
+- Only pivot to a new topic when they've clearly wrapped up a thought (says "that's it", asks you something, or gives a complete story)
+
+WHAT TO NATURALLY UNCOVER (across the whole conversation, not a checklist):
+1. What actually happened
+2. How it made them feel (in their own words, not yours)
+3. What they think was going on for their partner
+4. What they actually need underneath the frustration
+5. What "better" would look like for them
+
+Before responding, scan your previous messages. If you've used a particular sentence structure or opener, use a completely different one.
+
+HARD RULES:
+- Never take sides
+- Never give advice or solutions
+- Use their partner's actual name when reflecting
+- If they've covered something, don't circle back to it
+- When all 5 areas feel covered, wrap naturally: "I feel like I really get where you're coming from now. Anything else on your chest, or does that cover it?"`;
 
 type GenderCategory = 'male' | 'female' | 'neutral';
 
@@ -74,38 +78,224 @@ function categorizeGender(gender: string | null | undefined): GenderCategory {
 
 const GENDER_TONE_BLOCKS: Record<GenderCategory, string> = {
   male: `
-TONE ADAPTATION (for this specific user):
-- Use a grounded, coach-like voice — direct, calm, clear
-- Normalize vulnerability: frame emotional work as strength and courage, not weakness
-- Affirm competence: "You're being really clear about this" / "That's a solid insight"
-- Give permission without softness: "That took guts to say" / "Respect for naming that"
-- Pace with grounding cues: "Take a breath if you need one. No rush."
-- Avoid over-the-top emotional language; be warm but not flowery
-- Mirror their directness — if they're concise, you be concise`,
+TONE FOR THIS USER:
+- Be direct. Skip the soft lead-in and get to the point.
+- When they share something vulnerable, honor it without making it precious: "That's real." / "Respect for saying that."
+- If they go quiet or terse, don't pry — just be present: "No rush. I'm here."
+- Match their energy — if they're concise, you be concise.`,
 
   female: `
-TONE ADAPTATION (for this specific user):
-- Lead with validation — deeply acknowledge emotions before moving forward
-- Mirror feelings with specificity: "I can hear how much that affected you"
-- Allow more space before transitioning to the next question
-- Never rush past an emotion — sit with it, reflect it back
-- Use emotionally attuned language: "That sounds really painful" / "Your feelings about this are completely valid"
-- Warmth and emotional resonance come first; questions come second
-- If they express hurt, stay there longer before shifting topics`,
+TONE FOR THIS USER:
+- When emotions come up, sit with them — don't rush to the next question.
+- Validate with specificity, not generic warmth: reference the exact thing they said that landed.
+- Give space between emotional moments: "Take a sec with that."
+- Your energy: like a best friend who brings tea and just listens first.`,
 
   neutral: `
-TONE ADAPTATION (for this specific user):
-- Use warm, inclusive language with no gendered assumptions
-- "What you're feeling right now is completely valid"
-- "This is your space. You set the pace."
-- Balance emotional attunement with grounded presence
-- Let the user's own communication style guide your mirroring`,
+TONE FOR THIS USER:
+- Warm but not presumptuous. Let them set the pace and the emotional register.
+- Mirror their communication style — if they're analytical, meet them there. If they're emotional, hold space.
+- "This is your space. However you want to do this."`,
 };
 
-function buildSystemPrompt(gender: string | null | undefined): string {
-  const category = categorizeGender(gender);
-  return BASE_SYSTEM_PROMPT + '\n' + GENDER_TONE_BLOCKS[category];
+// ---------- Behavioral profile field mappings ----------
+
+const CONFLICT_BEHAVIOR_MAP: Record<string, string> = {
+  get_louder: 'Tends toward criticism/defensiveness when upset',
+  go_silent: 'Tends to stonewall — goes quiet and shuts down',
+  say_something_mean: 'Tends toward contempt/criticism under stress',
+  cry_or_fall_apart: 'Emotional flooding (expressive) — overwhelm comes out visibly',
+  go_numb: 'Emotional flooding (shutdown) — overwhelm causes them to disconnect',
+};
+
+const CORE_EMOTION_MAP: Record<string, string> = {
+  scared: 'Core emotion under conflict: fear of abandonment',
+  hurt: 'Core emotion under conflict: feeling inadequate or unworthy',
+  alone: 'Core emotion under conflict: emotional isolation',
+  overwhelmed: 'Core emotion under conflict: flooding/dysregulation',
+  embarrassed: 'Core emotion under conflict: shame response',
+};
+
+const PURSUE_WITHDRAW_MAP: Record<string, string> = {
+  push_harder: 'Pursuer — pushes harder to get a response when distressed',
+  pull_back: 'Withdrawer — pulls away to avoid escalation',
+  depends: 'Situational — may pursue or withdraw depending on context',
+};
+
+const FLOODING_THRESHOLD_MAP: Record<string, string> = {
+  immediately: 'High flood risk — hits overwhelm fast. Pace the conversation slowly.',
+  builds: 'Medium flood risk — overwhelm builds gradually. Standard pace.',
+  stay_level: 'Low flood risk — can stay regulated longer. More structure is fine.',
+};
+
+const CORE_FEAR_MAP: Record<string, string> = {
+  abandonment: 'Core fear: "They\'ll get tired of this eventually" — fear of being left',
+  inadequacy: 'Core fear: "I\'m probably overreacting again" — fear of not being enough',
+  invisibility: 'Core fear: "They don\'t actually care right now" — fear of being unseen',
+  engulfment: 'Core fear: "I just need space but they won\'t let me" — fear of losing autonomy',
+  hopelessness: 'Core fear: "We always end up back here" — fear it will never change',
+};
+
+const REPAIR_STYLE_MAP: Record<string, string> = {
+  real_apology: 'Repair language: words of acknowledgment / genuine apology',
+  physical_closeness: 'Repair language: physical touch and proximity',
+  time_apart: 'Repair language: de-escalation space then repair',
+  show_it: 'Repair language: acts of service / behavior change',
+  move_forward: 'Repair language: prefers to move forward without postmortem',
+  humor: 'Repair language: levity and humor to reconnect',
+};
+
+const RECURRING_THEME_MAP: Record<string, string> = {
+  not_priority: 'Perpetual theme: attention/affection deficit — "I don\'t feel prioritized"',
+  no_space: 'Perpetual theme: autonomy/control conflict — boundaries around space',
+  emotional_labor: 'Perpetual theme: emotional labor imbalance',
+  only_explodes: 'Perpetual theme: conflict avoidance until it explodes',
+  too_much: 'Perpetual theme: emotional invalidation — "you\'re too much / not enough"',
+  uncertain: 'Perpetual theme: commitment uncertainty',
+  different_every_time: 'No persistent perpetual theme',
+};
+
+const COMMUNICATION_MEDIUM_MAP: Record<string, string> = {
+  text: 'Fights mostly via text — HIGH misread-tone risk',
+  call: 'Fights mostly via calls — tone present but facial expressions absent',
+  in_person: 'Fights mostly in person — full signal, standard handling',
+  sit_on_it: 'Tends to sit on it — conflict avoidance / delayed explosion risk',
+};
+
+/**
+ * Maps a field value through a lookup table. Returns the human-readable
+ * description or null if the value is missing/unknown.
+ */
+function mapField(value: string | null | undefined, map: Record<string, string>): string | null {
+  if (!value) return null;
+  return map[value] || null;
 }
+
+/**
+ * Appends new-style behavioral profile lines for a single person.
+ * Returns true if at least one line was added.
+ */
+function appendNewProfileLines(data: Record<string, any>, lines: string[], label: string): boolean {
+  let added = false;
+
+  const push = (val: string | null) => {
+    if (val) { lines.push(`- ${label}: ${val}`); added = true; }
+  };
+
+  push(mapField(data.conflictBehavior, CONFLICT_BEHAVIOR_MAP));
+  push(mapField(data.coreEmotion, CORE_EMOTION_MAP));
+  push(mapField(data.pursueWithdraw, PURSUE_WITHDRAW_MAP));
+  push(mapField(data.floodingThreshold, FLOODING_THRESHOLD_MAP));
+  push(mapField(data.coreFear, CORE_FEAR_MAP));
+  push(mapField(data.repairStyle, REPAIR_STYLE_MAP));
+  push(mapField(data.recurringTheme, RECURRING_THEME_MAP));
+  push(mapField(data.communicationMedium, COMMUNICATION_MEDIUM_MAP));
+
+  return added;
+}
+
+/**
+ * Appends old-style profile lines (pre-redesign onboarding) as a fallback.
+ * Returns true if at least one line was added.
+ */
+function appendLegacyProfileLines(data: Record<string, any>, lines: string[], label: string): boolean {
+  let added = false;
+  if (data.communicationStyles?.length) {
+    lines.push(`- ${label}: Conflict style: ${data.communicationStyles.join(', ')}`);
+    added = true;
+  }
+  if (data.conflictFeelings?.length) {
+    lines.push(`- ${label}: Conflict triggers feelings of being ${data.conflictFeelings.join(', ')}`);
+    added = true;
+  }
+  if (data.attachmentStyle) {
+    lines.push(`- ${label}: Attachment tendency: ${data.attachmentStyle}`);
+    added = true;
+  }
+  if (data.pastConflictPatterns?.length) {
+    lines.push(`- ${label}: Recurring patterns: ${data.pastConflictPatterns.join(', ')}`);
+    added = true;
+  }
+  return added;
+}
+
+/**
+ * Detects whether a user data object uses the new behavioral profile fields.
+ */
+function hasNewProfileFields(data: Record<string, any> | null | undefined): boolean {
+  if (!data) return false;
+  return !!(data.conflictBehavior || data.coreEmotion || data.pursueWithdraw ||
+    data.floodingThreshold || data.coreFear || data.repairStyle ||
+    data.recurringTheme || data.communicationMedium);
+}
+
+/**
+ * Builds a couple profile block from onboarding data.
+ * The AI uses this silently to ask better questions — never surfaces it directly.
+ *
+ * Supports both the new behavioral profile fields (post-redesign) and the
+ * legacy fields (communicationStyles, conflictFeelings, etc.) for backward
+ * compatibility with couples who onboarded before the redesign.
+ */
+function buildCoupleProfileBlock(onboardingData: Record<string, any> | null, isUserA: boolean): string {
+  if (!onboardingData) return '';
+
+  // Get the current user's data and their partner's data
+  const userData = isUserA ? onboardingData.userA : onboardingData.userB;
+  const partnerData = isUserA ? onboardingData.userB : onboardingData.userA;
+
+  if (!userData && !partnerData) return '';
+
+  const lines: string[] = [
+    '\nCOUPLE CONTEXT (use silently to understand them better — NEVER say "you mentioned in onboarding" or reference this data directly):',
+  ];
+
+  // --- This person's profile ---
+  if (userData) {
+    if (hasNewProfileFields(userData)) {
+      appendNewProfileLines(userData, lines, 'This person');
+    } else {
+      appendLegacyProfileLines(userData, lines, 'This person');
+    }
+  }
+
+  // --- Partner's profile ---
+  if (partnerData) {
+    if (hasNewProfileFields(partnerData)) {
+      appendNewProfileLines(partnerData, lines, 'Their partner');
+    } else {
+      appendLegacyProfileLines(partnerData, lines, 'Their partner');
+    }
+  }
+
+  if (lines.length <= 1) return '';
+
+  lines.push('');
+  lines.push('USE THIS TO:');
+  lines.push('- Use flooding threshold to pace the interview — slower for high-flood-risk, more structured for low');
+  lines.push('- Use conflict behavior to understand what they SHOW vs what they FEEL (core emotion)');
+  lines.push('- Use pursue/withdraw role to explain each partner\'s behavior to the other without taking sides');
+  lines.push('- Use core fear to frame questions protectively — don\'t accidentally poke the wound');
+  lines.push('- Use repair style to understand what "making it better" means to each person');
+  lines.push('- Use recurring theme to notice if this conflict is a variation of a perpetual pattern');
+  lines.push('- Use communication medium to note tone-reading risks (especially text-based fights)');
+
+  return lines.join('\n');
+}
+
+function buildSystemPrompt(gender: string | null | undefined, pastContext?: string | null, coupleProfile?: string | null): string {
+  const category = categorizeGender(gender);
+  let prompt = BASE_SYSTEM_PROMPT + '\n' + GENDER_TONE_BLOCKS[category];
+  if (coupleProfile) {
+    prompt += '\n' + coupleProfile;
+  }
+  if (pastContext) {
+    prompt += `\n\nThis couple has used relate before. Here's context:\n${pastContext}\nUse this to ask more targeted questions.`;
+  }
+  return prompt;
+}
+
+export { buildCoupleProfileBlock };
 
 @Injectable()
 export class InterviewAIService {
@@ -122,15 +312,17 @@ export class InterviewAIService {
   async generateNextQuestion(
     conversationHistory: ConversationMessage[],
     gender?: string | null,
+    pastContext?: string | null,
+    coupleProfile?: string | null,
   ): Promise<string> {
     const response = await this.client.chat.completions.create({
       model: this.model,
       messages: [
-        { role: 'system', content: buildSystemPrompt(gender) },
+        { role: 'system', content: buildSystemPrompt(gender, pastContext, coupleProfile) },
         ...conversationHistory,
       ],
       temperature: 0.7,
-      max_tokens: 200,
+      max_tokens: 120,
     });
 
     return (
@@ -186,6 +378,8 @@ Keep everything neutral and non-judgmental. The topicTag will be shown to the pa
     conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }>,
     partnerAContext: { issues: string[]; needs: string[]; emotions: string[] },
     gender?: string | null,
+    pastContext?: string | null,
+    coupleProfile?: string | null,
   ): Promise<string> {
     const contextBlock = `
 CONTEXT FROM PARTNER'S SESSION (DO NOT reveal these details directly — use them to gently steer the conversation):
@@ -198,11 +392,11 @@ Your goal: Help this partner explore these same topic areas naturally, without r
     const response = await this.client.chat.completions.create({
       model: this.model,
       messages: [
-        { role: 'system', content: buildSystemPrompt(gender) + '\n\n' + contextBlock },
+        { role: 'system', content: buildSystemPrompt(gender, pastContext, coupleProfile) + '\n\n' + contextBlock },
         ...conversationHistory,
       ],
       temperature: 0.7,
-      max_tokens: 200,
+      max_tokens: 120,
     });
 
     return (

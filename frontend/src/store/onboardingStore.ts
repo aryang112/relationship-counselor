@@ -1,9 +1,12 @@
 /**
  * Onboarding Store — Persists onboarding form data across screens.
  *
- * Holds all user-entered data during the onboarding flow (name, communication
- * style, relationship story, partner details, love bank, conflict preferences).
- * Data is submitted to the backend when onboarding completes.
+ * Holds all user-entered data during the onboarding flow (name, gender,
+ * behavioral profile from 8 quiz screens). Data is submitted to the backend
+ * as couple onboarding data when onboarding completes.
+ *
+ * Profile fields map to psychological constructs (Gottman, EFT, attachment)
+ * but use casual language — see relate_onboarding_redesign_spec.md.
  */
 
 import { create } from 'zustand';
@@ -18,37 +21,37 @@ export const PRONOUN_MAP: Record<string, { subject: string; object: string; poss
 };
 
 export interface OnboardingData {
-  // Screen 3: Your Name + Gender
+  // Screen 1: Identity (name + gender)
   firstName: string;
   gender: Gender;
 
-  // Screen 4a: Communication Style
-  communicationStyles: string[];
+  // Screen 2: Conflict Behavior — Gottman Four Horsemen mapping
+  conflictBehavior: string;
 
-  // Screen 4b: Conflict Feelings
-  conflictFeelings: string[];
+  // Screen 3: Core Emotion — EFT primary emotion
+  coreEmotion: string;
 
-  // Screen 5: Relationship Story
-  datingStartDate: string; // ISO date string
-  isLongDistance: boolean | null;
-  howMet: string;
-  firstDateLocation: string;
+  // Screen 4: Pursue vs Withdraw — demand/withdraw cycle role
+  pursueWithdraw: string;
 
-  // Screen 6: Partner Details
+  // Screen 5: Flooding Threshold — physiological overwhelm speed
+  floodingThreshold: string;
+
+  // Screen 6: Core Fear — attachment fear (disguised)
+  coreFear: string;
+
+  // Screen 7: Repair Style — what helps after a fight
+  repairStyle: string;
+
+  // Screen 8: Recurring Theme — perpetual conflict pattern
+  recurringTheme: string;
+
+  // Screen 9: Communication Medium — how fights happen
+  communicationMedium: string;
+
+  // Legacy fields kept for backward compatibility with existing couples
   partnerName: string;
   partnerGender: Gender;
-  partnerCommunicationStyles: string[];
-  partnerConflictFeelings: string[];
-
-  // Screen 7: Love Bank
-  loveReasons: [string, string, string];
-  favoriteMemory: string;
-  relationshipStrengths: string[];
-
-  // Screen 8: Conflict Preferences
-  resolutionSpeed: string;
-  attachmentStyle: string;
-  pastConflictPatterns: string[];
 }
 
 interface OnboardingState extends OnboardingData {
@@ -62,22 +65,16 @@ interface OnboardingState extends OnboardingData {
 const initialData: OnboardingData = {
   firstName: '',
   gender: '',
-  communicationStyles: [],
-  conflictFeelings: [],
-  datingStartDate: '',
-  isLongDistance: null,
-  howMet: '',
-  firstDateLocation: '',
+  conflictBehavior: '',
+  coreEmotion: '',
+  pursueWithdraw: '',
+  floodingThreshold: '',
+  coreFear: '',
+  repairStyle: '',
+  recurringTheme: '',
+  communicationMedium: '',
   partnerName: '',
   partnerGender: '',
-  partnerCommunicationStyles: [],
-  partnerConflictFeelings: [],
-  loveReasons: ['', '', ''],
-  favoriteMemory: '',
-  relationshipStrengths: [],
-  resolutionSpeed: '',
-  attachmentStyle: '',
-  pastConflictPatterns: [],
 };
 
 export const useOnboardingStore = create<OnboardingState>((set) => ({

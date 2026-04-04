@@ -7,6 +7,13 @@ import {
 import { PrismaService } from '../../prisma.service';
 import { randomUUID } from 'crypto';
 
+/** Shape of a single love bank entry stored in the JSON array. */
+export interface LoveBankEntry {
+  id: string;
+  text: string;
+  createdAt: string;
+}
+
 const coupleInclude = {
   userA: {
     select: {
@@ -50,7 +57,8 @@ export class CouplesService {
       throw new ConflictException('User is already part of a couple');
     }
 
-    const inviteToken = randomUUID();
+    // Generate a 6-digit numeric invite code (human-friendly, easy to share verbally)
+    const inviteToken = await this.generateUniqueInviteCode();
 
     const couple = await this.prisma.couple.create({
       data: {
@@ -183,5 +191,147 @@ export class CouplesService {
 
   bothPartnersSignedAgreement(couple: any): boolean {
     return !!(couple.userASignedAt && couple.userBSignedAt);
+  }
+
+  /** Generate a unique 6-digit numeric invite code. Retries on collision. */
+  private async generateUniqueInviteCode(): Promise<string> {
+    for (let attempt = 0; attempt < 10; attempt++) {
+      const code = String(Math.floor(100000 + Math.random() * 900000));
+      const existing = await this.prisma.couple.findUnique({ where: { inviteToken: code } });
+      if (!existing) return code;
+    }
+    // Extremely unlikely fallback — 8 digits
+    return String(Math.floor(10000000 + Math.random() * 90000000));
+  }
+
+  // ─── Love Bank CRUD ────────────────────────────────────────────────
+
+  /** Returns the love bank entries array for the user's couple. */
+  async getLoveBank(userId: string): Promise<LoveBankEntry[]> {
+    const couple = await this.getCoupleForUser(userId);
+    return ((couple.loveBankEntries as unknown) as LoveBankEntry[] | null) ?? [];
+  }
+
+  /** Appends a new entry to the love bank JSON array. Returns the new entry. */
+  async addLoveBankEntry(userId: string, text: string): Promise<LoveBankEntry> {
+    const couple = await this.getCoupleForUser(userId);
+    const entries: LoveBankEntry[] =
+      ((couple.loveBankEntries as unknown) as LoveBankEntry[] | null) ?? [];
+
+    const newEntry: LoveBankEntry = {
+      id: randomUUID(),
+      text,
+      createdAt: new Date().toISOString(),
+    };
+
+    entries.unshift(newEntry);
+
+    await this.prisma.couple.update({
+      where: { id: couple.id },
+      data: { loveBankEntries: entries as any },
+    });
+
+    return newEntry;
+  }
+
+  /** Removes an entry from the love bank by id. */
+  async deleteLoveBankEntry(
+    userId: string,
+    entryId: string,
+  ): Promise<{ success: boolean }> {
+    const couple = await this.getCoupleForUser(userId);
+    const entries: LoveBankEntry[] =
+      ((couple.loveBankEntries as unknown) as LoveBankEntry[] | null) ?? [];
+
+    const filtered = entries.filter((e) => e.id !== entryId);
+
+    if (filtered.length === entries.length) {
+      throw new NotFoundException('Love bank entry not found');
+    }
+
+    await this.prisma.couple.update({
+      where: { id: couple.id },
+      data: { loveBankEntries: filtered as any },
+    });
+
+    return { success: true };
+  }
+
+  // ─── Couple Stats ──────────────────────────────────────────────────
+
+  /** Aggregated relationship stats for the couple. */
+  async getCoupleStats(userId: string) {
+    const couple = await this.getCoupleForUser(userId);
+
+    // Count resolved sessions
+    const sessionsCompleted = await this.prisma.session.count({
+      where: { coupleId: couple.id, status: 'resolved' },
+    });
+
+    // Count commitments where both partners agreed
+    const commitmentsKept = await this.prisma.commitment.count({
+      where: {
+        session: { coupleId: couple.id },
+        userAAgreed: true,
+        userBAgreed: true,
+      },
+    });
+
+    // Most recent session
+    const latestSession = await this.prisma.session.findFirst({
+      where: { coupleId: couple.id },
+      orderBy: { createdAt: 'desc' },
+      select: { createdAt: true },
+    });
+
+    const daysSinceLastSession = latestSession
+      ? Math.floor(
+          (Date.now() - latestSession.createdAt.getTime()) /
+            (1000 * 60 * 60 * 24),
+        )
+      : null;
+
+    // Together since
+    let togetherSinceDays: number | null = null;
+    if (couple.datingStartDate) {
+      const parsed = new Date(couple.datingStartDate);
+      if (!isNaN(parsed.getTime())) {
+        togetherSinceDays = Math.max(
+          0,
+          Math.floor(
+            (Date.now() - parsed.getTime()) / (1000 * 60 * 60 * 24),
+          ),
+        );
+      }
+    }
+
+    return {
+      sessionsCompleted,
+      commitmentsKept,
+      daysSinceLastSession,
+      togetherSinceDays,
+    };
+  }
+
+  // ─── Learnings / Commitments ───────────────────────────────────────
+
+  /** Returns all commitments for the couple's sessions. */
+  async getLearnings(userId: string) {
+    const couple = await this.getCoupleForUser(userId);
+
+    const commitments = await this.prisma.commitment.findMany({
+      where: { session: { coupleId: couple.id } },
+      include: { session: { select: { createdAt: true } } },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    return commitments.map((c) => ({
+      id: c.id,
+      text: c.text,
+      sessionDate: c.session.createdAt.toISOString(),
+      userAAgreed: c.userAAgreed,
+      userBAgreed: c.userBAgreed,
+      createdAt: c.createdAt.toISOString(),
+    }));
   }
 }

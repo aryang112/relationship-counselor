@@ -8,7 +8,6 @@
  *   - Green safe badge: "Only you can see this" (safe + success colors)
  *   - Large Cormorant Garamond prompt text with italic emphasis
  *   - Chat history with AI and user bubbles
- *   - Emotion pills appearing after 2+ user responses
  *   - Bottom input bar: text area + voice button
  *
  * Preserves all existing useInterview hook integration and multi-turn chat flow.
@@ -41,6 +40,7 @@ import { ChatBubble } from '../../components/domain/ChatBubble';
 import { TypingIndicator } from '../../components/domain/TypingIndicator';
 import { VoiceRecorderButton } from '../../components/domain/VoiceRecorderButton';
 import { LoadingScreen } from '../../components/feedback/LoadingScreen';
+import { CrisisResourcesModal } from '../../components/domain/CrisisResourcesModal';
 import { colors, fontFamilies, spacing, radius, shadows } from '../../theme';
 import { useInterview } from '../../hooks/useInterview';
 import { useAudioRecorder } from '../../hooks/useAudioRecorder';
@@ -52,6 +52,7 @@ import { formatTime } from '../../utils/format';
 interface InterviewScreenProps {
   sessionId: string;
   partnerBOpeningMessage?: string;
+  readOnly?: boolean;
   onExit: () => void;
   onComplete: () => void;
 }
@@ -59,6 +60,7 @@ interface InterviewScreenProps {
 export function InterviewScreen({
   sessionId,
   partnerBOpeningMessage,
+  readOnly,
   onExit,
   onComplete,
 }: InterviewScreenProps) {
@@ -70,10 +72,12 @@ export function InterviewScreen({
     isTranscribing,
     isThinking,
     isComplete,
+    crisisDetected,
     sendTextResponse,
     sendVoiceResponse,
     exitAndSaveDraft,
   } = useInterview(sessionId, partnerBOpeningMessage, user?.gender, user?.name);
+  const [showCrisisModal, setShowCrisisModal] = useState(false);
   const { isRecording, startRecording, stopRecording, resetRecording } =
     useAudioRecorder();
   const [inputText, setInputText] = useState('');
@@ -117,8 +121,13 @@ export function InterviewScreen({
   }, []);
 
   React.useEffect(() => {
-    if (isComplete) onComplete();
-  }, [isComplete, onComplete]);
+    if (readOnly || !isComplete) return;
+    if (crisisDetected) {
+      setShowCrisisModal(true);
+    } else {
+      onComplete();
+    }
+  }, [isComplete, crisisDetected, onComplete, readOnly]);
 
   const handleSendText = useCallback(async () => {
     const text = inputText.trim();
@@ -155,10 +164,10 @@ export function InterviewScreen({
       >
         {/* ── Top bar ── */}
         <View style={styles.topBar}>
-          <Pressable onPress={handleExit} style={styles.backBtn}>
+          <Pressable onPress={handleExit} style={styles.backBtn} accessibilityLabel="Go back" accessibilityRole="button">
             <ArrowLeft color={colors.textSecondary} size={22} />
           </Pressable>
-          <Text style={styles.stepIndicator}>Step 1 of 3</Text>
+          <Text style={styles.stepIndicator} accessibilityRole="header">{readOnly ? 'Chat History' : 'Step 1 of 3'}</Text>
           <Animated.View style={[styles.safeBadge, safeBadgeAnimatedStyle]}>
             <Lock color={colors.success} size={12} />
             <Text style={styles.safeBadgeText}>Only you can see this</Text>
@@ -186,7 +195,7 @@ export function InterviewScreen({
           ref={flatListRef}
           data={messages}
           keyExtractor={(item) => item.id}
-          contentContainerStyle={styles.chatList}
+          contentContainerStyle={[styles.chatList, { flexGrow: 1, justifyContent: 'flex-end' }]}
           keyboardDismissMode="on-drag"
           keyboardShouldPersistTaps="handled"
           onContentSizeChange={() =>
@@ -205,7 +214,7 @@ export function InterviewScreen({
         />
 
         {/* ── Input area ── */}
-        {!isComplete && (
+        {!isComplete && !readOnly && (
           <View style={styles.inputBar}>
             {showVoice ? (
               <View style={styles.voiceRow}>
@@ -215,7 +224,7 @@ export function InterviewScreen({
                   onPressStop={handleStopRecording}
                   disabled={isTranscribing}
                 />
-                <Pressable onPress={() => setShowVoice(false)} style={styles.cancelVoice}>
+                <Pressable onPress={() => setShowVoice(false)} style={styles.cancelVoice} accessibilityLabel="Cancel voice recording" accessibilityRole="button">
                   <Text style={styles.cancelText}>Cancel</Text>
                 </Pressable>
               </View>
@@ -242,6 +251,8 @@ export function InterviewScreen({
                 <Pressable
                   onPress={() => setShowVoice(true)}
                   style={styles.voiceBtn}
+                  accessibilityLabel="Record voice message"
+                  accessibilityRole="button"
                 >
                   <Mic color={colors.textInverse} size={20} />
                 </Pressable>
@@ -253,6 +264,8 @@ export function InterviewScreen({
                   <Pressable
                     onPress={handleSendText}
                     style={styles.sendBtn}
+                    accessibilityLabel="Send message"
+                    accessibilityRole="button"
                   >
                     <Text style={styles.sendText}>Send</Text>
                   </Pressable>
@@ -262,6 +275,15 @@ export function InterviewScreen({
           </View>
         )}
       </KeyboardAvoidingView>
+
+      {/* Crisis resources modal — auto-opens when crisis detected after interview submit */}
+      <CrisisResourcesModal
+        visible={showCrisisModal}
+        onClose={() => {
+          setShowCrisisModal(false);
+          onComplete();
+        }}
+      />
     </SafeArea>
   );
 }
@@ -407,4 +429,5 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textSecondary,
   },
+
 });

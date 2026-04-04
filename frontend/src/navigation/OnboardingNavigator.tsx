@@ -1,16 +1,21 @@
 /**
  * OnboardingNavigator — Guides new users through the full onboarding flow.
  *
- * De-escalation-focused flow (5 quiz screens, all selection-based, before signup):
- *   Splash -> Promise -> YourName -> CommunicationStyle -> ConflictFeelings
- *   -> PartnerDetails -> ConflictPreferences -> [CreateAccount] -> Consent
- *   -> InvitePartner -> WaitingForPartner -> Connected -> Agreement -> Tutorial -> (MainApp)
+ * Behavioral profile flow (8 quiz screens, all single-select, before signup):
+ *   Splash -> Promise -> YourName -> ConflictBehavior -> CoreEmotion
+ *   -> PursueWithdraw -> FloodingThreshold -> CoreFear -> RepairStyle
+ *   -> RecurringTheme -> CommunicationMedium -> [CreateAccount] -> Consent
+ *   -> InvitePartner -> NotificationPermission -> Paywall -> Agreement -> (MainApp)
  *
- * Every quiz question maps to a specific de-escalation strategy the AI can use:
- *   - Communication style → conflict role (pursuer/withdrawer)
- *   - Conflict feelings → triggers & raw spots
- *   - Partner details → partner's patterns + where they met
- *   - Conflict preferences → resolution speed, attachment, Horsemen patterns
+ * Each quiz question maps to a psychological construct the AI uses silently:
+ *   - Conflict behavior → Gottman Four Horsemen
+ *   - Core emotion → EFT primary emotion
+ *   - Pursue/withdraw → demand/withdraw cycle role
+ *   - Flooding threshold → overwhelm pacing
+ *   - Core fear → attachment fear (disguised)
+ *   - Repair style → post-conflict reconnection
+ *   - Recurring theme → perpetual conflict pattern
+ *   - Communication medium → tone-reading risk
  *
  * CreateAccount is skipped if the user is already authenticated (e.g., User B via invite).
  * Consent requires auth (JWT) so it comes after CreateAccount.
@@ -36,16 +41,19 @@ import * as SecureStore from 'expo-secure-store';
 import { SplashScreen } from '../screens/onboarding/SplashScreen';
 import { PromiseScreen } from '../screens/onboarding/PromiseScreen';
 import { YourNameScreen } from '../screens/onboarding/YourNameScreen';
-import { CommunicationStyleScreen } from '../screens/onboarding/CommunicationStyleScreen';
-import { ConflictFeelingsScreen } from '../screens/onboarding/ConflictFeelingsScreen';
-import { PartnerDetailsScreen } from '../screens/onboarding/PartnerDetailsScreen';
-import { ConflictPreferencesScreen } from '../screens/onboarding/ConflictPreferencesScreen';
+import { ConflictBehaviorScreen } from '../screens/onboarding/ConflictBehaviorScreen';
+import { CoreEmotionScreen } from '../screens/onboarding/CoreEmotionScreen';
+import { PursueWithdrawScreen } from '../screens/onboarding/PursueWithdrawScreen';
+import { FloodingThresholdScreen } from '../screens/onboarding/FloodingThresholdScreen';
+import { CoreFearScreen } from '../screens/onboarding/CoreFearScreen';
+import { RepairStyleScreen } from '../screens/onboarding/RepairStyleScreen';
+import { RecurringThemeScreen } from '../screens/onboarding/RecurringThemeScreen';
+import { CommunicationMediumScreen } from '../screens/onboarding/CommunicationMediumScreen';
 import { ConsentScreen } from '../screens/onboarding/ConsentScreen';
 import { InvitePartnerScreen } from '../screens/onboarding/InvitePartnerScreen';
 import { AcceptInviteScreen } from '../screens/onboarding/AcceptInviteScreen';
 import { WaitingForPartnerScreen } from '../screens/onboarding/WaitingForPartnerScreen';
 import { ConnectedScreen } from '../screens/onboarding/ConnectedScreen';
-import { AgreementScreen } from '../screens/onboarding/AgreementScreen';
 import { NotificationPermissionScreen } from '../screens/onboarding/NotificationPermissionScreen';
 import { TutorialScreen } from '../screens/onboarding/TutorialScreen';
 
@@ -53,15 +61,22 @@ import { TutorialScreen } from '../screens/onboarding/TutorialScreen';
 import { RegisterScreen } from '../screens/auth/RegisterScreen';
 import { LoginScreen } from '../screens/auth/LoginScreen';
 
+// ── Paywall ─────────────────────────────────────────────────────────
+import { PaywallScreen } from '../screens/subscription/PaywallScreen';
+
 const ONBOARDING_KEY = 'onboarding_done';
 
-// All 5 quiz screens tracked in the progress bar (before signup)
+// All 8 quiz screens tracked in the progress bar (before signup)
 const PROGRESS_SCREENS = [
   'YourName',
-  'CommunicationStyle',
-  'ConflictFeelings',
-  'PartnerDetails',
-  'ConflictPreferences',
+  'ConflictBehavior',
+  'CoreEmotion',
+  'PursueWithdraw',
+  'FloodingThreshold',
+  'CoreFear',
+  'RepairStyle',
+  'RecurringTheme',
+  'CommunicationMedium',
 ] as const;
 
 function getProgress(screenName: string): number {
@@ -77,10 +92,14 @@ export type OnboardingStackParamList = {
   Splash: undefined;
   Promise: undefined;
   YourName: undefined;
-  CommunicationStyle: undefined;
-  ConflictFeelings: undefined;
-  PartnerDetails: undefined;
-  ConflictPreferences: undefined;
+  ConflictBehavior: undefined;
+  CoreEmotion: undefined;
+  PursueWithdraw: undefined;
+  FloodingThreshold: undefined;
+  CoreFear: undefined;
+  RepairStyle: undefined;
+  RecurringTheme: undefined;
+  CommunicationMedium: undefined;
   CreateAccount: undefined;
   Login: undefined;
   Consent: undefined;
@@ -88,7 +107,7 @@ export type OnboardingStackParamList = {
   AcceptInvite: { token?: string; fromInvitePartner?: boolean } | undefined;
   WaitingForPartner: undefined;
   Connected: undefined;
-  Agreement: undefined;
+  Paywall: undefined;
   NotificationPermission: undefined;
   Tutorial: undefined;
   // Legacy alias
@@ -127,26 +146,22 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
       console.log('[ONBOARDING] Failed to update profile:', e);
     }
 
-    // Submit couple onboarding data (all quiz answers for AI analysis)
+    // Submit couple onboarding data (behavioral profile for AI)
     try {
       const onboardingPayload = {
-        datingStartDate: store.datingStartDate || undefined,
         data: {
-          communicationStyles: store.communicationStyles,
-          conflictFeelings: store.conflictFeelings,
-          isLongDistance: store.isLongDistance,
-          howMet: store.howMet,
-          firstDateLocation: store.firstDateLocation,
+          // New behavioral profile fields (v2)
+          conflictBehavior: store.conflictBehavior,
+          coreEmotion: store.coreEmotion,
+          pursueWithdraw: store.pursueWithdraw,
+          floodingThreshold: store.floodingThreshold,
+          coreFear: store.coreFear,
+          repairStyle: store.repairStyle,
+          recurringTheme: store.recurringTheme,
+          communicationMedium: store.communicationMedium,
+          // Partner name (if entered during invite flow)
           partnerName: store.partnerName,
           partnerGender: store.partnerGender,
-          partnerCommunicationStyles: store.partnerCommunicationStyles,
-          partnerConflictFeelings: store.partnerConflictFeelings,
-          loveReasons: store.loveReasons,
-          favoriteMemory: store.favoriteMemory,
-          relationshipStrengths: store.relationshipStrengths,
-          resolutionSpeed: store.resolutionSpeed,
-          attachmentStyle: store.attachmentStyle,
-          pastConflictPatterns: store.pastConflictPatterns,
         },
       };
       const updatedCouple = await submitCoupleOnboarding(onboardingPayload);
@@ -175,6 +190,10 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
           <SplashScreen
             onGetStarted={() => navigation.navigate('Promise')}
             onHaveCode={() => navigation.navigate('AcceptInvite')}
+            onSignIn={() => {
+              // Skip onboarding → RootNavigator shows AuthNavigator with login
+              useAuthStore.getState().setOnboardingDone(true);
+            }}
           />
         )}
       </Stack.Screen>
@@ -188,53 +207,97 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
         )}
       </Stack.Screen>
 
-      {/* Screen 3: Your Name + Gender (before auth — data stored locally) */}
+      {/* Quiz Screen 1: Your Name + Gender */}
       <Stack.Screen name="YourName">
         {({ navigation }) => (
           <YourNameScreen
-            onNext={() => navigation.navigate('CommunicationStyle')}
+            onNext={() => navigation.navigate('ConflictBehavior')}
             progress={getProgress('YourName')}
           />
         )}
       </Stack.Screen>
 
-      {/* Screen 4: Communication Style — maps conflict role (pursuer/withdrawer) */}
-      <Stack.Screen name="CommunicationStyle">
+      {/* Quiz Screen 2: Conflict Behavior — Gottman Four Horsemen */}
+      <Stack.Screen name="ConflictBehavior">
         {({ navigation }) => (
-          <CommunicationStyleScreen
-            onNext={() => navigation.navigate('ConflictFeelings')}
+          <ConflictBehaviorScreen
+            onNext={() => navigation.navigate('CoreEmotion')}
             onBack={() => navigation.goBack()}
-            progress={getProgress('CommunicationStyle')}
+            progress={getProgress('ConflictBehavior')}
           />
         )}
       </Stack.Screen>
 
-      {/* Screen 5: Conflict Feelings — maps triggers & raw spots */}
-      <Stack.Screen name="ConflictFeelings">
+      {/* Quiz Screen 3: Core Emotion — EFT primary emotion */}
+      <Stack.Screen name="CoreEmotion">
         {({ navigation }) => (
-          <ConflictFeelingsScreen
-            onNext={() => navigation.navigate('PartnerDetails')}
+          <CoreEmotionScreen
+            onNext={() => navigation.navigate('PursueWithdraw')}
             onBack={() => navigation.goBack()}
-            progress={getProgress('ConflictFeelings')}
+            progress={getProgress('CoreEmotion')}
           />
         )}
       </Stack.Screen>
 
-      {/* Screen 6: Partner Details — name, gender, their patterns, where you met */}
-      <Stack.Screen name="PartnerDetails">
+      {/* Quiz Screen 4: Pursue vs Withdraw — demand/withdraw cycle */}
+      <Stack.Screen name="PursueWithdraw">
         {({ navigation }) => (
-          <PartnerDetailsScreen
-            onNext={() => navigation.navigate('ConflictPreferences')}
+          <PursueWithdrawScreen
+            onNext={() => navigation.navigate('FloodingThreshold')}
             onBack={() => navigation.goBack()}
-            progress={getProgress('PartnerDetails')}
+            progress={getProgress('PursueWithdraw')}
           />
         )}
       </Stack.Screen>
 
-      {/* Screen 7: Conflict Preferences — resolution speed, attachment, Horsemen */}
-      <Stack.Screen name="ConflictPreferences">
+      {/* Quiz Screen 5: Flooding Threshold — overwhelm speed */}
+      <Stack.Screen name="FloodingThreshold">
         {({ navigation }) => (
-          <ConflictPreferencesScreen
+          <FloodingThresholdScreen
+            onNext={() => navigation.navigate('CoreFear')}
+            onBack={() => navigation.goBack()}
+            progress={getProgress('FloodingThreshold')}
+          />
+        )}
+      </Stack.Screen>
+
+      {/* Quiz Screen 6: Core Fear — attachment fear (disguised) */}
+      <Stack.Screen name="CoreFear">
+        {({ navigation }) => (
+          <CoreFearScreen
+            onNext={() => navigation.navigate('RepairStyle')}
+            onBack={() => navigation.goBack()}
+            progress={getProgress('CoreFear')}
+          />
+        )}
+      </Stack.Screen>
+
+      {/* Quiz Screen 7: Repair Style — post-fight reconnection */}
+      <Stack.Screen name="RepairStyle">
+        {({ navigation }) => (
+          <RepairStyleScreen
+            onNext={() => navigation.navigate('RecurringTheme')}
+            onBack={() => navigation.goBack()}
+            progress={getProgress('RepairStyle')}
+          />
+        )}
+      </Stack.Screen>
+
+      {/* Quiz Screen 8: Recurring Theme — perpetual conflict pattern */}
+      <Stack.Screen name="RecurringTheme">
+        {({ navigation }) => (
+          <RecurringThemeScreen
+            onNext={() => navigation.navigate('CommunicationMedium')}
+            onBack={() => navigation.goBack()}
+            progress={getProgress('RecurringTheme')}
+          />
+        )}
+      </Stack.Screen>
+
+      {/* Quiz Screen 9: Communication Medium — how fights happen */}
+      <Stack.Screen name="CommunicationMedium">
+        {({ navigation }) => (
+          <CommunicationMediumScreen
             onNext={() => {
               const isAuth = useAuthStore.getState().isAuthenticated;
               if (isAuth) {
@@ -245,12 +308,12 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
               }
             }}
             onBack={() => navigation.goBack()}
-            progress={getProgress('ConflictPreferences')}
+            progress={getProgress('CommunicationMedium')}
           />
         )}
       </Stack.Screen>
 
-      {/* Screen 8: Create Account (inline auth — before Consent which needs JWT) */}
+      {/* Create Account (inline auth — before Consent which needs JWT) */}
       <Stack.Screen name="CreateAccount">
         {({ navigation }) => (
           <RegisterScreen
@@ -260,7 +323,7 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
         )}
       </Stack.Screen>
 
-      {/* Screen 8b: Login (for returning users who already have an account) */}
+      {/* Login (for returning users who already have an account) */}
       <Stack.Screen name="Login">
         {({ navigation }) => (
           <LoginScreen
@@ -271,7 +334,7 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
         )}
       </Stack.Screen>
 
-      {/* Screen 9: Legal Consent (requires JWT — must come after auth) */}
+      {/* Legal Consent (requires JWT — must come after auth) */}
       <Stack.Screen name="Consent">
         {({ navigation }) => (
           <ConsentScreen
@@ -293,9 +356,9 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
                 }
               }
 
-              const couple = useAuthStore.getState().couple;
+              const coupleState = useAuthStore.getState().couple;
               // User B already has a couple — skip InvitePartner, go to Connected
-              if (couple?.userBId) {
+              if (coupleState?.userBId) {
                 navigation.navigate('Connected');
               } else {
                 navigation.navigate('InvitePartner');
@@ -306,13 +369,13 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
         )}
       </Stack.Screen>
 
-      {/* Screen 10: Invite Partner */}
+      {/* Invite Partner — after inviting, go straight to notifications then paywall */}
       <Stack.Screen name="InvitePartner">
         {({ navigation }) => (
           <InvitePartnerScreen
-            onPartnerJoined={() => navigation.replace('Connected')}
+            onPartnerJoined={() => navigation.replace('NotificationPermission')}
             onGoToAccept={() => navigation.navigate('AcceptInvite', { fromInvitePartner: true })}
-            onSkip={() => navigation.replace('WaitingForPartner')}
+            onSkip={() => navigation.replace('NotificationPermission')}
           />
         )}
       </Stack.Screen>
@@ -336,7 +399,7 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
         )}
       </Stack.Screen>
 
-      {/* Screen 11: Waiting for Partner */}
+      {/* Waiting for Partner (legacy — kept for deep links) */}
       <Stack.Screen name="WaitingForPartner">
         {({ navigation }) => (
           <WaitingForPartnerScreen
@@ -356,28 +419,29 @@ export function OnboardingNavigator({ onComplete }: OnboardingNavigatorProps) {
         )}
       </Stack.Screen>
 
-      {/* Screen 12: Connected Celebration */}
+      {/* Connected Celebration (User B path) */}
       <Stack.Screen name="Connected">
         {({ navigation }) => (
           <ConnectedScreen
-            onBegin={() => navigation.replace('Agreement')}
+            onBegin={() => navigation.replace('NotificationPermission')}
           />
         )}
       </Stack.Screen>
 
-      {/* Screen 13: Mutual Agreement (both partners must sign before sessions) */}
-      <Stack.Screen name="Agreement">
-        {({ navigation }) => (
-          <AgreementScreen
-            onComplete={() => navigation.navigate('NotificationPermission')}
-          />
-        )}
-      </Stack.Screen>
-
-      {/* Screen 14: Notification Permission (after Agreement, before finishing) */}
+      {/* Notification Permission (before paywall) */}
       <Stack.Screen name="NotificationPermission">
+        {({ navigation }) => (
+          <NotificationPermissionScreen onNext={() => navigation.replace('Paywall')} />
+        )}
+      </Stack.Screen>
+
+      {/* Paywall — final onboarding step, then enter main app */}
+      <Stack.Screen name="Paywall">
         {() => (
-          <NotificationPermissionScreen onNext={finishOnboarding} />
+          <PaywallScreen
+            onSkip={finishOnboarding}
+            onPurchased={finishOnboarding}
+          />
         )}
       </Stack.Screen>
 

@@ -172,7 +172,7 @@ export function HomeScreen() {
                 partnerRole="A"
               />
               <View style={styles.topBarGreeting}>
-                <Text style={styles.helloText} numberOfLines={1}>Hello, {firstName}</Text>
+                <Text style={styles.helloText} numberOfLines={1} accessibilityRole="header">Hello, {firstName}</Text>
                 <Text style={styles.helloEmoji}> 👋</Text>
               </View>
             </View>
@@ -214,6 +214,8 @@ export function HomeScreen() {
               onPress={handleInvitePartner}
               disabled={inviteLoading}
               style={styles.inviteBanner}
+              accessibilityLabel="Invite your partner"
+              accessibilityRole="button"
             >
               {inviteLoading ? (
                 <ActivityIndicator size="small" color={colors.orangeMid} style={{ marginRight: 10 }} />
@@ -234,6 +236,8 @@ export function HomeScreen() {
               styles.ctaCard,
               pressed && { opacity: 0.95, transform: [{ scale: 0.99 }] },
             ]}
+            accessibilityLabel="Start a mediation session"
+            accessibilityRole="button"
           >
             <View style={styles.ctaLeft}>
               <View style={styles.ctaIconWrap}>
@@ -261,8 +265,8 @@ export function HomeScreen() {
                   <Avatar name={couple?.userB?.name || 'B'} size="sm" partnerRole="B" />
                 </View>
                 <Badge
-                  label={activeSession.status === 'awaiting_partner_b' ? 'Awaiting Partner' : 'In Session'}
-                  variant="active"
+                  label={activeSession.status === 'awaiting_partner_b' ? 'Awaiting Partner' : activeSession.status === 'unpacking_ready' ? 'Unpacking Ready' : 'In Session'}
+                  variant={activeSession.status === 'unpacking_ready' ? 'success' : 'active'}
                 />
               </View>
               <Text style={styles.activeTopic} numberOfLines={2}>
@@ -282,6 +286,12 @@ export function HomeScreen() {
                     Waiting for {partnerName} to share their side
                   </Text>
                 </View>
+              ) : activeSession.status === 'unpacking_ready' ? (
+                <Button
+                  title="View Unpacking ✨"
+                  onPress={() => navigation.navigate('UnpackingChoice', { sessionId: activeSession.id })}
+                  style={styles.continueBtn}
+                />
               ) : (
                 <Button
                   title="Continue Session →"
@@ -305,7 +315,7 @@ export function HomeScreen() {
             <View style={styles.recentSection}>
               <View style={styles.recentHeader}>
                 <Text style={styles.sectionLabel}>RECENT SESSIONS</Text>
-                <Pressable onPress={() => navigation.navigate('SessionList')}>
+                <Pressable onPress={() => navigation.navigate('SessionList')} accessibilityLabel="See all sessions" accessibilityRole="button" style={styles.seeAllBtn}>
                   <Text style={styles.seeAllLink}>See all</Text>
                 </Pressable>
               </View>
@@ -395,8 +405,8 @@ const styles = StyleSheet.create({
   settingsBtn: {
     backgroundColor: 'rgba(255,255,255,0.15)',
     borderRadius: radius.pill,
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
     marginLeft: 8,
@@ -580,6 +590,11 @@ const styles = StyleSheet.create({
   sectionLabel: {
     ...typography.label,
     color: colors.textSecondary,
+  },
+  seeAllBtn: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 4,
   },
   seeAllLink: {
     fontFamily: fontFamilies.bodyBold,

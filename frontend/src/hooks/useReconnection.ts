@@ -95,9 +95,9 @@ export function useReconnection(
     return () => { mounted = false; };
   }, [sessionId]);
 
-  // Polling for partner messages when it's NOT my turn
+  // Always poll for new messages (both partners can send at any time)
   useEffect(() => {
-    if (!isMyTurn && !loading) {
+    if (!loading) {
       pollRef.current = setInterval(fetchMessages, POLL_INTERVAL);
     }
     return () => {
@@ -106,7 +106,7 @@ export function useReconnection(
         pollRef.current = null;
       }
     };
-  }, [isMyTurn, loading, fetchMessages]);
+  }, [loading, fetchMessages]);
 
   const sendMessage = useCallback(async (text: string) => {
     if (!text.trim() || sending) return;
@@ -120,7 +120,6 @@ export function useReconnection(
       timestamp: new Date().toISOString(),
     };
     setMessages(prev => [...prev, optimisticMsg]);
-    setIsMyTurn(false);
 
     try {
       await sendReconnectionMessage(sessionId, text.trim());
@@ -130,7 +129,6 @@ export function useReconnection(
       console.log('[Reconnection] Failed to send message:', err);
       // Remove optimistic message on failure
       setMessages(prev => prev.filter(m => m.id !== optimisticMsg.id));
-      setIsMyTurn(true);
     } finally {
       setSending(false);
     }

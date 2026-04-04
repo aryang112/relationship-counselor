@@ -32,11 +32,19 @@ export function InterviewCompleteScreen({
 }: InterviewCompleteScreenProps) {
   const user = useAuthStore((s) => s.user);
   const couple = useAuthStore((s) => s.couple);
-  const resolvedPartnerName = partnerName || (() => {
+  const partner = (() => {
     if (!couple) return undefined;
     const isUserA = user?.id === couple.userAId;
-    const partner = isUserA ? couple.userB : couple.userA;
-    return partner?.name?.split(' ')[0];
+    return isUserA ? couple.userB : couple.userA;
+  })();
+  const resolvedPartnerName = partnerName || partner?.name?.split(' ')[0];
+
+  // Map partner's gender to pronoun
+  const pronoun = (() => {
+    const g = partner?.gender;
+    if (g === 'Male') return 'his';
+    if (g === 'Female') return 'her';
+    return 'their';
   })();
 
   return (
@@ -48,7 +56,7 @@ export function InterviewCompleteScreen({
         </View>
 
         {/* Title */}
-        <Text style={styles.title}>
+        <Text style={styles.title} accessibilityRole="header">
           Thank you for sharing
         </Text>
 
@@ -64,7 +72,7 @@ export function InterviewCompleteScreen({
           <Text style={styles.waitIcon}>⏳</Text>
           <Text style={styles.waitNote}>
             {resolvedPartnerName
-              ? `Now it's ${resolvedPartnerName}'s turn to share their perspective. Once they do, we'll put it all together for you.`
+              ? `Now it's ${resolvedPartnerName}'s turn to share ${pronoun} perspective. Once ${pronoun === 'their' ? 'they do' : pronoun === 'his' ? 'he does' : 'she does'}, we'll put it all together for you.`
               : "Now it's your partner's turn to share. Once they do, we'll put it all together for you."}
           </Text>
         </View>

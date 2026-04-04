@@ -8,15 +8,175 @@
 ## Current Status
 
 **Branch:** `database-implementation`
-**Last updated:** 2026-03-25 (Agent C — Sprint 2, Task 2.1)
-**Last agent:** Agent C (inline unpacking fallback)
+**Last updated:** 2026-04-03 (Onboarding Redesign — COMPLETE)
+**Last agent:** Jarvis (Claude Opus 4.6)
 
 ### What's Active
-- All features compiling (zero new TypeScript errors — pre-existing smart quote issue on line 1080 of sessions.service.ts)
-- Sprint 2 Task 2.1 complete: inline unpacking fallback when Redis unavailable
-- 20/20 fixing tasks complete
-- Research docs created for splash/connected animations, congratulations/notifications screens
-- Ready for manual testing
+- **[2026-04-03] Onboarding Redesign** — COMPLETE ✓ (zero TS errors)
+  - Source: `relate_onboarding_redesign_spec.md`
+  - **Replaced 5 old quiz screens with 8 new behavioral profile screens:**
+    1. YourName (kept) → name + gender
+    2. ConflictBehaviorScreen (NEW) → Gottman Four Horsemen mapping
+    3. CoreEmotionScreen (NEW) → EFT primary emotion
+    4. PursueWithdrawScreen (NEW) → demand/withdraw cycle role
+    5. FloodingThresholdScreen (NEW) → overwhelm pacing
+    6. CoreFearScreen (NEW) → attachment fear (disguised)
+    7. RepairStyleScreen (NEW) → post-fight reconnection
+    8. RecurringThemeScreen (NEW) → perpetual conflict pattern
+    9. CommunicationMediumScreen (NEW) → how fights happen
+  - **All single-select** (not multi-select like old screens)
+  - **Deleted old screens:** CommunicationStyleScreen, ConflictFeelingsScreen, PartnerDetailsScreen, ConflictPreferencesScreen, RelationshipStoryScreen, LoveBankScreen
+  - **Updated onboardingStore.ts:** New profile fields (conflictBehavior, coreEmotion, pursueWithdraw, floodingThreshold, coreFear, repairStyle, recurringTheme, communicationMedium)
+  - **Updated OnboardingNavigator:** New 9-screen quiz flow → CreateAccount → Consent → InvitePartner → NotificationPermission → Paywall → Agreement → Main
+  - **Updated backend AI profile builder** (interview-ai.service.ts): New lookup maps for all profile fields with backward compatibility for legacy onboarding data
+  - **Paywall integration:** PaywallScreen now accepts onSkip/onPurchased props for onboarding context, shown after invite + notifications with "Start with 2 free sessions" skip option
+  - **Flow change:** No more WaitingForPartner screen in main flow — after InvitePartner goes directly to NotificationPermission → Paywall
+- **[2026-03-28] Sprint 5: App Store Compliance** — COMPLETE ✓ (all tasks, zero TS errors)
+  - Source: `relate_appstore_agent_spec.md` + `relate_appstore_compliance_spec.md`
+  - Plan: `tasks/todo.md`
+  - **Phase 1 — Foundation (Main Agent):**
+    - Schema: Added subscriptionTier, subscriptionExpiresAt, revenuecatId, resolvedSessionCount to User model
+    - Migration: `20260328181839_add_subscription_fields`
+    - Installed react-native-purchases (RevenueCat) + pod install
+    - Created subscription types + Zustand store
+  - **Phase 2 — Parallel Agents (5 agents, zero conflicts):**
+    - TASK 5.0: PaywallScreen + useSubscription hook — COMPLETE ✓
+      - `frontend/src/screens/subscription/PaywallScreen.tsx` (NEW) — Premium $14.99/mo + Resolve Now $2.99
+      - `frontend/src/hooks/useSubscription.ts` (NEW) — RevenueCat SDK wrapper
+      - Session gating in StartMediationScreen (2 free sessions, then paywall)
+      - Paywall added to MainNavigator
+    - TASK 5.1: Backend subscription endpoints — COMPLETE ✓
+      - GET /auth/subscription, POST /auth/subscription/verify, POST /auth/subscription/restore
+      - Paywall gate in startSession() (ForbiddenException if free tier + 2 resolved sessions)
+      - resolvedSessionCount incremented on session→resolved transition
+      - Subscription fields added to register/login/validateUser returns
+    - TASK 5.2: iOS Config + Compliance — COMPLETE ✓
+      - app.json: updated microphone description, notification color → #E07832, added RevenueCat plugin
+      - PrivacyInfo.xcprivacy created (email, name, user content, user ID, UserDefaults API)
+      - SplashScreen: "Not a therapist" disclaimer added
+      - SettingsScreen: Subscription section with Manage + Restore Purchases
+    - TASK 5.3: Demo Seed Script — COMPLETE ✓
+      - `backend/prisma/seed-demo.ts` — 2 demo accounts, completed session with interviews, unpacking, reconnection, commitment
+      - `docs/APP_STORE_REVIEW.md` — Reviewer credentials + testing instructions
+      - npm script: `seed:demo`
+    - TASK 5.4: Privacy Labels + Accessibility — COMPLETE ✓
+      - `privacy_labels_inventory.json` — 11 data types, 4 SDKs, no tracking
+      - Accessibility fixes across 15+ screen files: accessibilityLabel on icon-only buttons, accessibilityRole="header" on titles, tap targets bumped to 44×44 minimum
+  - **TypeScript: ZERO errors (frontend + backend)**
+  - **Previously done (from earlier sprints):** Account Deletion, AI Consent Modal, Privacy/ToS, Crisis Resources
+- **[2026-03-27] Sprint 4: User Feedback Fixes** — COMPLETE ✓ (14/16 issues fixed, zero TS errors)
+  - Remaining: #1 splash video, #2 connected video (P2, need Lottie assets)
+  - Source: `RelateApp_Fixing.rtf` (16 issues from user testing)
+  - Plan: `tasks/todo.md`
+  - Wave A (AI prompts): 4.5 interview AI, 4.10/11/12 unpacking prompts, 4.13-16 reconnection AI
+  - Wave B (frontend): 4.3 spacing, 4.4 pronouns, 4.6 remove pills, 4.9 dashboard CTA, 4.11b card overflow, 4.7 partner B context
+  - Wave C (video animations): 4.1 splash video, 4.2 connected video — P2
+  - **COMPLETED (Wave B Tasks 4.3, 4.4, 4.6, 4.9, 4.11b): Frontend UI Fixes**
+    - TASK 4.6: Removed ALL emotion pill code from InterviewScreen + useInterview (EMOTIONS array, showEmotionPills/emotionPillsShown state, useEffect, handleEmotionSelect, EmotionPill import, emotion pill JSX, emotion pill styles, responseCount state)
+    - TASK 4.4: Gender-aware pronouns on InterviewCompleteScreen — maps partner gender (Male→his, Female→her, else→their), updates waitNote text with gendered pronoun and verb form
+    - TASK 4.9: Dashboard "View Unpacking" CTA — when session status is 'unpacking_ready', shows "View Unpacking" button navigating to UnpackingChoice + "Unpacking Ready" badge
+    - TASK 4.3: Interview screen spacing fix — added flexGrow:1 + justifyContent:'flex-end' to FlatList contentContainerStyle so messages stack from bottom up (chat-app pattern)
+    - TASK 4.11b: Unpacking cards text overflow — wrapped card content in ScrollView with nestedScrollEnabled for both gradient and non-gradient cards, added cardScrollArea style
+  - **COMPLETED (Tasks 4.13-4.16): Reconnection Screen Fixes**
+    - TASK 4.13: Removed strict turn-taking — both partners can always send messages
+    - TASK 4.14: Removed AI name prefixes ("[Aryan]:") from system prompt + added explicit rule
+    - TASK 4.15: Removed suggested response pills (SUGGESTED_RESPONSES array + JSX + styles)
+    - TASK 4.16: Fixed header truncation, AI generates opening message when no messages exist, updated mediation prompt (1-2 sentence max, offline nudge after 6+ messages)
+  - **COMPLETED (Wave A Tasks 4.5, 4.10, 4.11, 4.12): AI Prompt Rewrites**
+    - TASK 4.5: Interview AI rewrite — new "close friend" voice (not therapist), response mix rotation (7 types), banned therapy cliches, 30% no-question responses, max_tokens 200→120 for shorter replies. Updated all 3 gender tone blocks (male=direct, female=specific validation, neutral=mirror style).
+    - TASK 4.10: Worker unpacking prompt rewrite — Spotify Wrapped energy, direct 2nd-person address ("you both"), added underlyingNeeds + breakthrough fields to JSON schema. Updated both generateUnpacking() and regenerateUnpacking() in workers/openai.service.ts.
+    - TASK 4.11: Worker unpacking processor field mapping — partnerAExperience now includes underlyingNeeds appended, deeperInsight uses breakthrough (recommendations as fallback). Both generate and regenerate processors updated.
+    - TASK 4.12: Inline unpacking prompts — updated generateUnpackingInline() and regenerateUnpackingInline() in sessions.service.ts to match worker prompts exactly. Same field mapping with underlyingNeeds + breakthrough.
+- **[2026-03-26] Sprint 3: App Store Readiness** — COMPLETE ✓ (all 11 tasks, zero TS errors)
+  - Plan: `tasks/todo.md` (10 tasks across P0/P1/P2)
+  - P0 Wave (in parallel):
+    - TASK 3.1: WaitingForPartnerScreen polling — COMPLETE
+    - TASK 3.2: Crisis alert & intervention system — COMPLETE
+    - TASK 3.3: Profile data API + frontend wiring — COMPLETE
+    - TASK 3.4: Interview worker inline fallback check — COMPLETE (N/A — already inline)
+  - P0 Wave: ALL COMPLETE ✓ (verified: zero TypeScript errors across frontend/backend/workers)
+  - P1 Wave (in parallel):
+    - TASK 3.5: Push notification deep linking — COMPLETE
+    - TASK 3.6: ReconnectTab active session routing — COMPLETE
+    - TASK 3.7: Emotion pills in interview — COMPLETE
+    - TASK 3.8a: AI session memory (past context in prompts) — COMPLETE
+  - P1 Wave: ALL COMPLETE ✓ (verified: zero TypeScript errors across frontend/backend/workers)
+  - P2 Wave (in parallel):
+    - TASK 3.8: Splash screen animation — COMPLETE
+    - TASK 3.9: Connected celebration animation — COMPLETE
+    - TASK 3.10: Commitment save celebration — COMPLETE
+  - P2 Wave: ALL COMPLETE ✓ (verified: zero TypeScript errors across frontend/backend/workers)
+  - **SPRINT 3 COMPLETE — App ready for E2E testing + App Store submission**
+- **[2026-03-26] TASK 3.8 Splash Screen Entrance Animation — COMPLETE** ✓
+  - `SplashScreen.tsx`: Replaced manual `useSharedValue`/`useAnimatedStyle`/`useEffect` animations with declarative `entering` props from reanimated. Logo: `FadeIn.duration(600)`. Tagline: `FadeIn.duration(600).delay(200)`. Bottom CTA area: `FadeInUp.duration(600).delay(400).springify().damping(15)`. Removed unused imports (`useEffect`, `Dimensions`, `useSharedValue`, `useAnimatedStyle`, `withTiming`, `withDelay`, `Easing`). No functionality changes.
+  - TypeScript: zero new errors (`npx tsc --noEmit` — 3 pre-existing errors in ConnectedScreen.tsx from TASK 3.9 in progress)
+- **[2026-03-26] TASK 3.9 Connected Celebration Animation — COMPLETE** ✓
+  - `ConnectedScreen.tsx`: Added entrance animations using reanimated `entering` props. Avatar row: `FadeInUp.duration(600).delay(300).springify().damping(14)`. Title: `FadeIn.duration(800)`. Subtitle: `FadeIn.duration(600).delay(600)`. Stats card: `FadeIn.duration(600).delay(600)`. CTA button: `FadeInUp.duration(500).delay(800)`. Added gentle breathing pulse on heart element (`withRepeat`/`withSequence` scaling 1.0-1.15 over 3s cycle, starts 1200ms after mount). Replaced `FadeInDown` imports with `FadeIn`/`FadeInUp`. No functionality changes.
+  - TypeScript: zero new errors (1 pre-existing in CommitmentsScreen.tsx, unrelated)
+- **[2026-03-26] TASK 3.10 Commitment Save Celebration Animation — COMPLETE** ✓
+  - `CommitmentsScreen.tsx`: Added pure reanimated confetti burst animation on save. 15 small dots in warm orange palette (orangeMid, orangeLight, orangeGlow, #FFF8F0) burst outward from the saved badge center on `handleSave` completion. Each particle animates translateX/Y (random angles, 60-150px distance), opacity 1->0, scale 1->0 over 1.2s with staggered delays (60ms increments). Particles auto-unmount after 1.5s via timer. Components: `CelebrationParticle` (individual dot with useSharedValue animations), `CelebrationBurst` (container positioning particles). No new dependencies — pure reanimated `withDelay`/`withTiming`. No functionality changes.
+  - TypeScript: zero errors (`npx tsc --noEmit` clean)
+- **[2026-03-26] TASK 3.7 Emotion Pills in Interview — COMPLETE** ✓
+  - `useInterview.ts`: Added `responseCount` state, tracked via `responsesRef.current.length`, exposed in return interface. Also restored on draft/completed interview resume.
+  - `InterviewScreen.tsx`: Imported `EmotionPill` + `FadeIn`. Added `EMOTIONS` array (6 emotions with emojis: Hurt, Dismissed, Scared, Angry, Confused, Overwhelmed). `showEmotionPills` triggers at `responseCount >= 2` (once only via `emotionPillsShown` guard). Pill row renders above input bar with FadeIn.duration(400). `handleEmotionSelect` sends "I felt {emotion}" as user message and hides pills. Manual text send also dismisses pills.
+  - TypeScript: zero errors (`npx tsc --noEmit` clean)
+- **[2026-03-26] TASK 3.8a AI Session Memory (Past Context in Prompts) — COMPLETE** ✓
+  - Added `getPastSessionContext()` public method to `SessionsService` — queries last 5 resolved sessions for a couple, builds a text block with topic, insight, pattern (100 char cap), and commitment for each. Returns null for first-time couples. Output capped at ~600 words.
+  - **Unpacking (inline):** `generateUnpackingInline()` fetches pastContext before OpenAI call, appends to system prompt if present.
+  - **Unpacking (worker):** `enqueueUnpackingJob()` fetches pastContext and passes as optional field in job data. Worker's `UnpackingJobData` interface updated with `pastContext?: string`. `openai.service.ts` `generateUnpacking()` accepts and injects pastContext. `unpacking.processor.ts` passes it through.
+  - **Interview:** `buildSystemPrompt()` accepts optional `pastContext` param. `generateNextQuestion()` and `generateNextQuestionWithContext()` pass it through. Controller's `getNextQuestion` endpoint fetches pastContext via `sessionsService.getPastSessionContext()`.
+  - **Reconnection:** `sendMessage()` fetches pastContext inline (same query pattern). `generateAIMediation()` accepts and injects pastContext into system prompt.
+  - All changes are additive — null pastContext (first session) produces identical behavior to before.
+  - TypeScript: zero errors in both backend and workers.
+  - Files modified: `sessions.service.ts`, `interview-ai.service.ts`, `sessions.controller.ts`, `reconnection.service.ts`, `unpacking-queue.service.ts` (backend), `unpacking.queue.ts`, `openai.service.ts`, `unpacking.processor.ts` (workers)
+- **[2026-03-26] TASK 3.4 Interview Worker Inline Fallback — N/A, COMPLETE** ✓
+  - Interview question generation is already inline — calls OpenAI directly from `interview-ai.service.ts` (`generateNextQuestion` + `generateNextQuestionWithContext`), no BullMQ dependency. No code changes needed.
+- **[2026-03-26] TASK 3.3 Profile Data API + Frontend Wiring — COMPLETE** ✓
+  - Schema: Added `loveBankEntries Json? @default("[]")` to Couple model. Migration: `20260327013014_add_love_bank_entries`
+  - Backend: 5 new endpoints on CouplesController — `GET/POST/DELETE /couples/love-bank`, `GET /couples/stats`, `GET /couples/learnings`. All JWT-guarded via existing JwtAuthGuard. Service queries Prisma for sessions (resolved count), commitments (both agreed), latest session date, datingStartDate.
+  - Frontend: New `services/couples.ts` with typed API calls (getLoveBank, addLoveBankEntry, deleteLoveBankEntry, getCoupleStats, getLearnings)
+  - LoveBankScreen: Replaced mock data with useEffect→getLoveBank(). Add/delete now hit API. Loading + empty states.
+  - LearningsHistoryScreen: Replaced MOCK_LEARNINGS with useEffect→getLearnings(). Loading + empty states. Removed context field (not in Commitment model).
+  - UsProfileScreen: Added useEffect loading getCoupleStats()+getLoveBank()+getLearnings() in parallel. Stats now show real data. Love Bank section shows preview card with latest entry count. Learnings section shows preview card. Falls back to local computation if API fails.
+  - TypeScript: Zero errors in both frontend and backend.
+- **[2026-03-26] TASK 3.2 Crisis Alert & Intervention System — COMPLETE** ✓
+  - **Layer 1 (Backend):** Added `detectCrisisInline()` private method to `sessions.service.ts`. Called after interview save in `submitInterview()`. Concatenates all user answers, sends to OpenAI (gpt-4o-mini, temp 0.3) with crisis detection prompt. On medium/high severity: logs `[CRISIS DETECTED]`, sends fire-and-forget email with crisis hotlines via `notificationsService.send()` (email-only channel). Returns `crisisDetected` boolean in response. Controller spreads `crisisDetected` into the interview response object.
+  - **Layer 2 (Frontend):** `useInterview` hook exposes `crisisDetected` state. After `submitInterview()` response, sets flag if true. `InterviewScreen` shows `CrisisResourcesModal` when crisis detected — user sees resources before navigating to InterviewCompleteScreen. Non-blocking: dismiss closes modal and proceeds normally.
+  - **Layer 3 (Worker):** Replaced TODO in `crisis.processor.ts` with structured `[CRISIS ALERT]` log (sessionId, userId, severity, concerns) for monitoring/Sentry/DataDog pickup.
+  - TypeScript: zero new errors (3 pre-existing in `couples.service.ts` from TASK 3.3)
+- **[2026-03-26] Unpacking Regeneration — COMPLETE** ✓
+- All features compiling
+
+### What TASK 3.5 Agent Completed (March 26 — Push Notification Deep Linking)
+- **NEW `navigation/navigationRef.ts`**: Exports `navigationRef` (passed to `NavigationContainer` in App.tsx) and `navigateFromOutside()` helper using `CommonActions.navigate` for type-safe navigation from outside React components.
+- **NEW `store/deepLinkStore.ts`**: Zustand store for pending deep link intent. Stores `{ screen, params }` when user taps a notification while unauthenticated. Consumed after auth completes via `consumePendingDeepLink()`.
+- **`App.tsx`**: Added `ref={navigationRef}` to `NavigationContainer`.
+- **`useNotifications.ts`**: Wired `addNotificationResponseReceivedListener` to extract `{ sessionId, type }` from notification data and navigate to the correct screen:
+  - `session_initiated` / `partner_b_invite` / `partner_b_reminder_*` → PartnerBEntry
+  - `unpacking_ready` / `partner_viewed_unpacking` / `unpacking_unlocked` → UnpackingChoice
+  - `reconnection_turn` → Reconnection
+  - `post_resolution_checkin` / `manual_interview_reminder` → SessionDetail
+  - Default → HomeTabs
+  - If not authenticated: stores intent in deepLinkStore instead of navigating.
+  - Foreground notifications: no auto-navigation (banner only).
+- **`RootNavigator.tsx`**: Added `useEffect` that consumes pending deep links after `isAuthenticated && onboardingDone` become true (300ms delay for MainNavigator mount).
+- TypeScript check: zero errors (`npx tsc --noEmit` clean)
+
+### What TASK 3.1 Agent Completed (March 26 — WaitingForPartnerScreen Polling)
+- **`WaitingForPartnerScreen.tsx`**: Added session status polling (5s interval via `setInterval` + refs). Reads `sessionId` from route params via `useRoute`. When `status === 'unpacking_ready'`, shows "{partner} just finished!" text for 1.5s, then navigates to `UnpackingChoice` with `{ sessionId }`. Both interval and timeout cleaned up on unmount.
+- No other files modified. No new dependencies.
+- TypeScript check: zero errors (`npx tsc --noEmit` clean)
+
+### What Agent C Completed (March 26 — Frontend Regeneration UX)
+- **`useUnpacking.ts`**: Added `isRegenerating` boolean state + background polling after feedback submission. Captures `updatedAt` before API call, polls `getUnpacking()` every 3s (up to 10 attempts), detects changed `updatedAt` to update state. Polling cleaned up on unmount via refs.
+- **`UnpackingScreen.tsx`**: Added regenerating banner overlay (semi-transparent dark bg, ActivityIndicator + text) with FadeIn/FadeOut animation. FeedbackSheet onSubmit now closes sheet + shows "Regenerating insights..." toast. Cards auto-update when polling detects new data.
+- TypeScript check: zero errors (`npx tsc --noEmit` clean)
+
+### What Agent B Completed (March 26 — Unpacking Regeneration)
+- Added `regenerateUnpackingInline()` method to `sessions.service.ts` — mirrors `generateUnpackingInline()` but includes previous unpacking output + user feedback in the prompt
+- Wired into `submitUnpackingFeedback()`: captures `enqueueResult` from BullMQ enqueue, falls back to inline regeneration when `enqueued === false` (fire-and-forget pattern)
+- Removed stale TODO comment block (~15 lines) in `calculateSessionStatus()` about notifications — `notifyUnpackingReady()` is already implemented
+- TypeScript check: zero errors (`npx tsc --noEmit` clean)
 
 ### What Was Done This Session (March 24, Session 8 — RelateApp_Fixing)
 
@@ -343,6 +503,25 @@ Post-auth: Consent → InvitePartner → WaitingForPartner → Connected → Agr
 - InterviewScreen (returnKeyType="send"), ReconnectionScreen (chat interface)
 
 **Verification:** Zero TypeScript errors.
+
+### [2026-03-26] Agent A: Worker regenerate-unpacking handler (Complete)
+
+**Files modified:**
+1. `workers/src/queues/unpacking.queue.ts` — Added `RegenerateUnpackingJobData` interface with sessionId, unpackingId, feedbackReason, feedbackText, previousUnpacking, partnerAResponses, partnerBResponses
+2. `workers/src/services/openai.service.ts` — Added `regenerateUnpacking()` method with feedback-aware prompt (includes previous output, maps feedbackReason to human-readable text, optional feedbackText). Same model/temperature/schema as `generateUnpacking()`.
+3. `workers/src/processors/unpacking.processor.ts` — `processJob()` now routes by `job.name`: `regenerate-unpacking` → `processRegenerateJob()`, default → `processGenerateJob()`. Regenerate handler extracts feedback data, calls `openAIService.regenerateUnpacking()`, upserts DB with same field mapping. Same retry policy (3 attempts, exponential backoff).
+
+**Verification:** `npx tsc --noEmit` — zero errors.
+
+### What TASK 3.6 Agent Completed (March 26 — ReconnectTab Active Session Routing)
+- **`ReconnectTabScreen.tsx`**: Complete rewrite from static empty state to dynamic 3-state screen:
+  1. **Active reconnection**: Fetches sessions via `getSessions()`, filters `status === 'reconnection'`. Shows card with topic, partner name, status text, and "Continue Reconnection" orange CTA button that navigates to `Reconnection` screen.
+  2. **Past reconnections**: Filters `status === 'resolved'`, sorted by updatedAt desc. Each card shows topic, resolved date, checkmark icon. Tappable → `SessionDetail` with `{ id }`.
+  3. **Empty state**: Original empty state preserved for when no sessions exist.
+- Loading state: ActivityIndicator while fetching. Pull-to-refresh via RefreshControl.
+- Uses auth store for partner name resolution from couple data.
+- No new files or dependencies added.
+- TypeScript check: zero new errors (2 pre-existing in useInterview.ts and useNotifications.ts, unrelated)
 
 ## In Progress
 - Nothing currently in progress

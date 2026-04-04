@@ -74,7 +74,7 @@ export function YourNameScreen({ onNext, progress }: YourNameScreenProps) {
           <KeyboardAware style={styles.keyboardContent}>
             <Container style={styles.container}>
               <Animated.View entering={FadeInDown.duration(500).delay(200)}>
-                <Text style={styles.title}>
+                <Text style={styles.title} accessibilityRole="header">
                   What's your first name?
                 </Text>
               </Animated.View>

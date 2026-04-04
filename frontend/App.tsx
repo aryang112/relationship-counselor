@@ -30,6 +30,7 @@ import {
 } from '@expo-google-fonts/dm-sans';
 import * as Linking from 'expo-linking';
 import { RootNavigator, navTheme } from './src/navigation/RootNavigator';
+import { navigationRef } from './src/navigation/navigationRef';
 import { ToastOverlay } from './src/components/feedback/ToastOverlay';
 
 const linking: Parameters<typeof NavigationContainer>[0]['linking'] = {
@@ -68,7 +69,7 @@ export default function App() {
     <GestureHandlerRootView style={styles.root}>
       <SafeAreaProvider>
         <QueryClientProvider client={queryClient}>
-          <NavigationContainer theme={navTheme} linking={linking}>
+          <NavigationContainer ref={navigationRef} theme={navTheme} linking={linking}>
             <StatusBar style="dark" />
             <RootNavigator />
             <ToastOverlay />

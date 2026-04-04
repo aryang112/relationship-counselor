@@ -1,15 +1,13 @@
 /**
- * CommunicationStyleScreen — Captures user's communication tendencies.
+ * CoreFearScreen — Captures the user's core fear that surfaces during conflict.
  *
- * Displays a question about how the user behaves when upset, with
- * multi-select pill options. The user can select multiple styles
- * that resonate with them.
+ * Single-select pill screen presenting quoted inner thoughts that map to
+ * attachment-based fear patterns (abandonment, inadequacy, invisibility, etc.).
  */
 
 import React from 'react';
 import { View, Text, StyleSheet, Pressable, ScrollView } from 'react-native';
 import Animated, { FadeInDown, FadeInUp, useSharedValue, useAnimatedStyle, withSpring } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Container } from '../../components/layout/Container';
 import { Button } from '../../components/ui/Button';
@@ -19,12 +17,12 @@ import { selectionTap } from '../../utils/haptics';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-const COMMUNICATION_OPTIONS = [
-  { id: 'withdraw', label: 'I withdraw and go quiet' },
-  { id: 'talk', label: 'I need to talk it out immediately' },
-  { id: 'analyze', label: 'I overthink and analyze everything' },
-  { id: 'emotional', label: 'I get emotional and reactive' },
-  { id: 'avoid', label: 'I avoid the topic entirely' },
+const CORE_FEAR_OPTIONS = [
+  { id: 'abandonment', label: "\"They'll get tired of this eventually\"" },
+  { id: 'inadequacy', label: "\"I'm probably overreacting again\"" },
+  { id: 'invisibility', label: "\"They don't actually care right now\"" },
+  { id: 'engulfment', label: "\"I just need space but they won't let me\"" },
+  { id: 'hopelessness', label: "\"We always end up back here\"" },
 ];
 
 /** Animated pill with spring scale on press */
@@ -57,7 +55,7 @@ function PillOption({ label, isSelected, onPress, testID }: {
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      accessibilityRole="checkbox"
+      accessibilityRole="radio"
       accessibilityState={{ checked: isSelected }}
     >
       <Text style={[styles.pillText, isSelected && styles.pillTextSelected]}>
@@ -67,28 +65,23 @@ function PillOption({ label, isSelected, onPress, testID }: {
   );
 }
 
-interface CommunicationStyleScreenProps {
+interface CoreFearScreenProps {
   onNext: () => void;
   onBack: () => void;
   progress: number;
 }
 
-export function CommunicationStyleScreen({
+export function CoreFearScreen({
   onNext,
   onBack,
   progress,
-}: CommunicationStyleScreenProps) {
-  const selected = useOnboardingStore((s) => s.communicationStyles);
+}: CoreFearScreenProps) {
+  const selected = useOnboardingStore((s) => s.coreFear);
   const setField = useOnboardingStore((s) => s.setField);
-  const insets = useSafeAreaInsets();
 
-  const toggleOption = (id: string) => {
+  const selectOption = (id: string) => {
     selectionTap();
-    if (selected.includes(id)) {
-      setField('communicationStyles', selected.filter((s) => s !== id));
-    } else {
-      setField('communicationStyles', [...selected, id]);
-    }
+    setField('coreFear', id);
   };
 
   return (
@@ -107,17 +100,14 @@ export function CommunicationStyleScreen({
       >
         <Container>
           <Animated.View entering={FadeInDown.duration(500).delay(200)}>
-            <Text style={styles.title}>
-              When you're upset, you tend to...
-            </Text>
-            <Text style={styles.subtitle}>
-              Select all that apply.
+            <Text style={styles.title} accessibilityRole="header">
+              In the middle of a real fight, which thought shows up?
             </Text>
           </Animated.View>
 
           <View style={styles.pillContainer}>
-            {COMMUNICATION_OPTIONS.map((option, index) => {
-              const isSelected = selected.includes(option.id);
+            {CORE_FEAR_OPTIONS.map((option, index) => {
+              const isSelected = selected === option.id;
               return (
                 <Animated.View
                   key={option.id}
@@ -127,7 +117,7 @@ export function CommunicationStyleScreen({
                     testID={`pill-${option.id}`}
                     label={option.label}
                     isSelected={isSelected}
-                    onPress={() => toggleOption(option.id)}
+                    onPress={() => selectOption(option.id)}
                   />
                 </Animated.View>
               );
@@ -179,11 +169,6 @@ const styles = StyleSheet.create({
     lineHeight: 38,
     color: colors.textPrimary,
     letterSpacing: -0.3,
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.textMuted,
     marginBottom: spacing.xl,
   },
   pillContainer: {

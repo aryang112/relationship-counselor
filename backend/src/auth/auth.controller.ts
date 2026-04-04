@@ -69,4 +69,24 @@ export class AuthController {
   async deleteAccount(@Request() req, @Body() body: { reason?: string }) {
     return this.authService.deleteAccount(req.user.id, body.reason);
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('subscription')
+  async getSubscriptionStatus(@Request() req) {
+    return this.authService.getSubscriptionStatus(req.user.id);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('subscription/verify')
+  @HttpCode(HttpStatus.OK)
+  async verifySubscription(@Request() req, @Body() body: { revenuecatId: string; tier: string }) {
+    return this.authService.verifySubscription(req.user.id, body);
+  }
+
+  @UseGuards(JwtAuthGuard)
+  @Post('subscription/restore')
+  @HttpCode(HttpStatus.OK)
+  async restoreSubscription(@Request() req, @Body() body: { revenuecatId: string }) {
+    return this.authService.restoreSubscription(req.user.id, body);
+  }
 }

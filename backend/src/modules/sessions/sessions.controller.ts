@@ -12,7 +12,7 @@ import {
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { SessionsService } from './sessions.service';
-import { InterviewAIService } from './interview-ai.service';
+import { InterviewAIService, buildCoupleProfileBlock } from './interview-ai.service';
 import { StartSessionDto } from './dto/start-session.dto';
 import { SubmitInterviewDto } from './dto/submit-interview.dto';
 import { SaveDraftInterviewDto } from './dto/save-draft-interview.dto';
@@ -55,7 +55,7 @@ export class SessionsController {
       req.user.id,
       dto,
     );
-    return result.interview;
+    return { ...result.interview, crisisDetected: result.crisisDetected };
   }
 
   @Post(':id/interview/next-question')
@@ -67,6 +67,17 @@ export class SessionsController {
     const session = await this.sessionsService.getSession(id, req.user.id);
     const userGender: string | null = req.user.gender ?? null;
 
+    // Fetch past session context for AI memory across sessions
+    const pastContext = await this.sessionsService.getPastSessionContext(
+      (session as any).coupleId,
+      id,
+    );
+
+    // Fetch couple onboarding data for personality-aware questioning
+    const coupleData = await this.sessionsService.getCoupleOnboardingData((session as any).coupleId);
+    const isUserA = (session as any).couple?.userAId === req.user.id;
+    const coupleProfile = buildCoupleProfileBlock(coupleData, isUserA);
+
     // If user is Partner B and session has extraction data, use context-aware generation
     const isPartnerB = session.initiatedBy !== req.user.id;
     const extraction = session.partnerAExtraction as { issues?: string[]; needs?: string[]; emotions?: string[] } | null;
@@ -77,9 +88,11 @@ export class SessionsController {
         dto.conversationHistory,
         { issues: extraction.issues, needs: extraction.needs || [], emotions: extraction.emotions || [] },
         userGender,
+        pastContext,
+        coupleProfile,
       );
     } else {
-      question = await this.interviewAI.generateNextQuestion(dto.conversationHistory, userGender);
+      question = await this.interviewAI.generateNextQuestion(dto.conversationHistory, userGender, pastContext, coupleProfile);
     }
 
     return { question };

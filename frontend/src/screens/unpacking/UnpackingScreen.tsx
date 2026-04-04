@@ -31,7 +31,9 @@ import {
   Dimensions,
   FlatList,
   Pressable,
+  ScrollView,
   StatusBar,
+  ActivityIndicator,
   type ViewToken,
 } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -41,6 +43,7 @@ import Animated, {
   FadeIn,
   FadeInDown,
   FadeInUp,
+  FadeOut,
   useSharedValue,
   useAnimatedStyle,
   withSpring,
@@ -92,6 +95,7 @@ export function UnpackingScreen() {
   const {
     isLoading,
     isMutating,
+    isRegenerating,
     state,
     unpacking,
     error,
@@ -253,26 +257,30 @@ export function UnpackingScreen() {
 
           {/* Split view for "needs" card */}
           {item.type === 'needs' ? (
-            <View style={styles.splitContainer}>
-              <View style={[styles.splitHalf, { borderRightWidth: 1, borderRightColor: colors.border }]}>
-                <View style={[styles.splitDot, { backgroundColor: colors.partnerA }]} />
-                <Text style={[styles.splitName, { color: colors.partnerA }]}>{partnerAName}</Text>
-                <Text style={[styles.cardContent, { color: item.textColor }]}>
-                  {unpacking?.partnerAExperience || 'Generating insights...'}
-                </Text>
+            <ScrollView style={styles.cardScrollArea} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+              <View style={styles.splitContainer}>
+                <View style={[styles.splitHalf, { borderRightWidth: 1, borderRightColor: colors.border }]}>
+                  <View style={[styles.splitDot, { backgroundColor: colors.partnerA }]} />
+                  <Text style={[styles.splitName, { color: colors.partnerA }]}>{partnerAName}</Text>
+                  <Text style={[styles.cardContent, { color: item.textColor }]}>
+                    {unpacking?.partnerAExperience || 'Generating insights...'}
+                  </Text>
+                </View>
+                <View style={styles.splitHalf}>
+                  <View style={[styles.splitDot, { backgroundColor: colors.partnerB }]} />
+                  <Text style={[styles.splitName, { color: colors.partnerB }]}>{partnerBName}</Text>
+                  <Text style={[styles.cardContent, { color: item.textColor }]}>
+                    {unpacking?.partnerBExperience || 'Generating insights...'}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.splitHalf}>
-                <View style={[styles.splitDot, { backgroundColor: colors.partnerB }]} />
-                <Text style={[styles.splitName, { color: colors.partnerB }]}>{partnerBName}</Text>
-                <Text style={[styles.cardContent, { color: item.textColor }]}>
-                  {unpacking?.partnerBExperience || 'Generating insights...'}
-                </Text>
-              </View>
-            </View>
+            </ScrollView>
           ) : (
-            <Text style={[styles.cardContent, { color: item.subtitleColor }]}>
-              {item.content}
-            </Text>
+            <ScrollView style={styles.cardScrollArea} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+              <Text style={[styles.cardContent, { color: item.subtitleColor }]}>
+                {item.content}
+              </Text>
+            </ScrollView>
           )}
 
           {/* Synthesized attribution for situation card */}
@@ -308,9 +316,11 @@ export function UnpackingScreen() {
                   <Sparkles size={20} color="rgba(255,255,255,0.7)" />
                 </View>
               )}
-              <Text style={[styles.cardContent, { color: item.subtitleColor }]}>
-                {item.content}
-              </Text>
+              <ScrollView style={styles.cardScrollArea} nestedScrollEnabled showsVerticalScrollIndicator={false}>
+                <Text style={[styles.cardContent, { color: item.subtitleColor }]}>
+                  {item.content}
+                </Text>
+              </ScrollView>
             </LinearGradient>
           </View>
         );
@@ -329,7 +339,7 @@ export function UnpackingScreen() {
     return (
       <SafeArea>
         <View style={styles.lockedHeader}>
-          <Text style={styles.lockedTitle}>Your Unpacking</Text>
+          <Text style={styles.lockedTitle} accessibilityRole="header">Your Unpacking</Text>
           <Text style={styles.lockedSub}>
             The AI read both sides. Results are almost ready.
           </Text>
@@ -363,7 +373,7 @@ export function UnpackingScreen() {
       {/* Header on dark bg */}
       <Animated.View entering={FadeInDown.duration(600)} style={styles.darkHeader}>
         <Text style={styles.eyebrow}>relate · unpacking</Text>
-        <Text style={styles.heroTitle}>Here's what{'\n'}we found.</Text>
+        <Text style={styles.heroTitle} accessibilityRole="header">Here's what{'\n'}we found.</Text>
         <View style={styles.avatarsRow}>
           <Avatar name={couple?.userA?.name || 'A'} size="sm" partnerRole="A" />
           <Text style={styles.plusWhite}>+</Text>
@@ -426,20 +436,38 @@ export function UnpackingScreen() {
           style={styles.primaryBtn}
         />
         <View style={styles.ghostRow}>
-          <Pressable onPress={() => setFeedbackOpen(true)}>
+          <Pressable onPress={() => setFeedbackOpen(true)} accessibilityLabel="Give feedback on unpacking" accessibilityRole="button" style={styles.ghostBtn}>
             <Text style={styles.ghostText}>Give feedback</Text>
           </Pressable>
-          <Pressable onPress={() => navigation.goBack()}>
+          <Pressable onPress={() => navigation.goBack()} accessibilityLabel="Come back later" accessibilityRole="button" style={styles.ghostBtn}>
             <Text style={styles.ghostText}>Come back later</Text>
           </Pressable>
         </View>
       </Animated.View>
 
+      {/* Regenerating banner overlay */}
+      {isRegenerating && (
+        <Animated.View
+          entering={FadeIn.duration(300)}
+          exiting={FadeOut.duration(300)}
+          style={styles.regeneratingOverlay}
+        >
+          <ActivityIndicator size="small" color={colors.orangeLight} />
+          <Text style={styles.regeneratingText}>
+            Improving insights based on your feedback...
+          </Text>
+        </Animated.View>
+      )}
+
       <FeedbackSheet
         visible={feedbackOpen}
         loading={isMutating}
         onClose={() => setFeedbackOpen(false)}
-        onSubmit={sendFeedback}
+        onSubmit={async (payload) => {
+          await sendFeedback(payload);
+          setFeedbackOpen(false);
+          addToast('Regenerating insights...', 'info');
+        }}
       />
     </View>
   );
@@ -522,6 +550,9 @@ const styles = StyleSheet.create({
     fontSize: 28,
     lineHeight: 34,
     marginBottom: 16,
+  },
+  cardScrollArea: {
+    flex: 1,
   },
   cardContent: {
     fontFamily: fontFamilies.body,
@@ -607,10 +638,37 @@ const styles = StyleSheet.create({
     gap: 24,
     marginTop: 16,
   },
+  ghostBtn: {
+    minHeight: 44,
+    justifyContent: 'center',
+    paddingHorizontal: 8,
+  },
   ghostText: {
     fontFamily: fontFamilies.body,
     fontSize: 14,
     color: 'rgba(255,255,255,0.5)',
+  },
+
+  // ---- Regenerating overlay ----
+  regeneratingOverlay: {
+    position: 'absolute',
+    top: 140,
+    left: 24,
+    right: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+    backgroundColor: 'rgba(26, 14, 8, 0.85)',
+    borderRadius: radius.lg,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    zIndex: 10,
+  },
+  regeneratingText: {
+    fontFamily: fontFamilies.body,
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
   },
 
   // ---- Locked state (light bg) ----

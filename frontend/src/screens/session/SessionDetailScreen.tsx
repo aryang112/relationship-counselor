@@ -19,7 +19,7 @@ import { View, Text, StyleSheet, ScrollView, Pressable } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
-import { ArrowLeft, CheckCircle, Circle, Bell } from 'lucide-react-native';
+import { ArrowLeft, CheckCircle, Circle, Bell, ChevronRight } from 'lucide-react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Card } from '../../components/ui/Card';
 import { Button } from '../../components/ui/Button';
@@ -111,6 +111,22 @@ export function SessionDetailScreen() {
   }, [couple?.userAId, couple?.userBId, session]);
 
   const statusIndex = session ? STATUSES.indexOf(session.status) : -1;
+  const isResolved = session?.status === 'resolved';
+
+  /** Navigate to a specific stage when viewing a resolved session's history. */
+  const handleTimelineTap = useCallback((status: SessionStatus) => {
+    if (!session || !isResolved) return;
+
+    if (status === 'in_progress') {
+      navigation.navigate('Interview', { sessionId: session.id, readOnly: true });
+    } else if (status === 'unpacking_ready') {
+      navigation.navigate('Unpacking', { sessionId: session.id });
+    } else if (status === 'reconnection') {
+      navigation.navigate('Reconnection', { sessionId: session.id });
+    } else if (status === 'resolved') {
+      navigation.navigate('Commitments', { sessionId: session.id });
+    }
+  }, [navigation, session, isResolved]);
 
   const handleContinue = useCallback(() => {
     if (!session) return;
@@ -207,9 +223,42 @@ export function SessionDetailScreen() {
               {STATUSES.map((status, index) => {
                 const reached = index <= statusIndex;
                 const isCurrent = index === statusIndex;
+                const isTappable = isResolved && reached && status !== 'initiated';
+                const rowContent = (
+                  <>
+                    {reached ? (
+                      <CheckCircle
+                        color={isCurrent ? colors.orangeMid : colors.orangeLight}
+                        size={20}
+                        fill={isCurrent ? colors.orangeTint : 'transparent'}
+                      />
+                    ) : (
+                      <Circle color={colors.border} size={20} />
+                    )}
+                    <Text
+                      style={[
+                        styles.timelineLabel,
+                        {
+                          color: reached ? colors.textPrimary : colors.textMuted,
+                          fontFamily: isCurrent ? fontFamilies.bodyBold : fontFamilies.body,
+                        },
+                      ]}
+                    >
+                      {STATUS_LABELS[status]}
+                    </Text>
+                    {isCurrent && !isResolved && (
+                      <View style={styles.currentBadge}>
+                        <Text style={styles.currentBadgeText}>Current</Text>
+                      </View>
+                    )}
+                    {isTappable && (
+                      <ChevronRight size={16} color={colors.textMuted} />
+                    )}
+                  </>
+                );
+
                 return (
                   <View key={status} style={styles.timelineItem}>
-                    {/* Connector line (not for first item) */}
                     {index > 0 && (
                       <View
                         style={[
@@ -222,33 +271,20 @@ export function SessionDetailScreen() {
                         ]}
                       />
                     )}
-                    <View style={styles.timelineRow}>
-                      {reached ? (
-                        <CheckCircle
-                          color={isCurrent ? colors.orangeMid : colors.orangeLight}
-                          size={20}
-                          fill={isCurrent ? colors.orangeTint : 'transparent'}
-                        />
-                      ) : (
-                        <Circle color={colors.border} size={20} />
-                      )}
-                      <Text
-                        style={[
-                          styles.timelineLabel,
-                          {
-                            color: reached ? colors.textPrimary : colors.textMuted,
-                            fontFamily: isCurrent ? fontFamilies.bodyBold : fontFamilies.body,
-                          },
-                        ]}
+                    {isTappable ? (
+                      <Pressable
+                        onPress={() => handleTimelineTap(status)}
+                        style={styles.timelineRow}
+                        accessibilityLabel={`View ${STATUS_LABELS[status]}`}
+                        accessibilityRole="button"
                       >
-                        {STATUS_LABELS[status]}
-                      </Text>
-                      {isCurrent && (
-                        <View style={styles.currentBadge}>
-                          <Text style={styles.currentBadgeText}>Current</Text>
-                        </View>
-                      )}
-                    </View>
+                        {rowContent}
+                      </Pressable>
+                    ) : (
+                      <View style={styles.timelineRow}>
+                        {rowContent}
+                      </View>
+                    )}
                   </View>
                 );
               })}
@@ -258,19 +294,21 @@ export function SessionDetailScreen() {
           {/* Action buttons */}
           <View style={styles.actions}>
             <Button
-              title="Continue"
+              title={isResolved ? 'View Learning' : 'Continue'}
               onPress={handleContinue}
               size="lg"
               style={styles.actionBtn}
             />
-            <Button
-              title="Remind partner"
-              variant="secondary"
-              loading={busy}
-              onPress={handleRemind}
-              icon={<Bell color={colors.orangeMid} size={16} />}
-              style={styles.actionBtn}
-            />
+            {!isResolved && (
+              <Button
+                title="Remind partner"
+                variant="secondary"
+                loading={busy}
+                onPress={handleRemind}
+                icon={<Bell color={colors.orangeMid} size={16} />}
+                style={styles.actionBtn}
+              />
+            )}
           </View>
         </ScrollView>
       </View>

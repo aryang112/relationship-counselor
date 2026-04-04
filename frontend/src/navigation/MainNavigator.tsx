@@ -39,6 +39,7 @@ import { UsProfileScreen } from '../screens/profile/UsProfileScreen';
 import { LoveBankScreen } from '../screens/profile/LoveBankScreen';
 import { LearningsHistoryScreen } from '../screens/profile/LearningsHistoryScreen';
 import { DeleteAccountScreen } from '../screens/settings/DeleteAccountScreen';
+import { PaywallScreen } from '../screens/subscription/PaywallScreen';
 import { StartMediationScreen } from '../screens/session/StartMediationScreen';
 import { PreSessionReminderScreen } from '../screens/session/PreSessionReminderScreen';
 import { WaitingForPartnerScreen } from '../screens/session/WaitingForPartnerScreen';
@@ -56,7 +57,7 @@ export type MainNavigatorParamList = {
   PreSessionReminder: { sessionId: string };
   WaitingForPartner: { sessionId?: string } | undefined;
   PartnerBEntry: { sessionId: string };
-  Interview: { sessionId: string; partnerBOpeningMessage?: string };
+  Interview: { sessionId: string; partnerBOpeningMessage?: string; readOnly?: boolean };
   InterviewComplete: { partnerName?: string } | undefined;
   UnpackingChoice: { sessionId: string };
   Unpacking: { sessionId: string };
@@ -68,6 +69,7 @@ export type MainNavigatorParamList = {
   UsProfile: undefined;
   LoveBank: undefined;
   LearningsHistory: undefined;
+  Paywall: undefined;
   // Tab screens (accessible from stack)
   Home: undefined;
   SessionList: undefined;
@@ -152,6 +154,7 @@ export function MainNavigator() {
           <InterviewScreen
             sessionId={route.params.sessionId}
             partnerBOpeningMessage={route.params.partnerBOpeningMessage}
+            readOnly={route.params.readOnly}
             onExit={() => navigation.goBack()}
             onComplete={() => navigation.replace('InterviewComplete', undefined)}
           />
@@ -175,6 +178,7 @@ export function MainNavigator() {
       <Stack.Screen name="UsProfile" component={UsProfileScreen} />
       <Stack.Screen name="LoveBank" component={LoveBankScreen} />
       <Stack.Screen name="LearningsHistory" component={LearningsHistoryScreen} />
+      <Stack.Screen name="Paywall" component={PaywallScreen} />
     </Stack.Navigator>
   );
 }

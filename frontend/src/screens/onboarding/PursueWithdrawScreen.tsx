@@ -1,9 +1,8 @@
 /**
- * ConflictFeelingsScreen — Captures what hurts most during a conflict.
+ * PursueWithdrawScreen — Captures user's pursue/withdraw tendency.
  *
- * Displays a question about emotional pain points during arguments,
- * with multi-select pill options. Helps the AI understand each
- * partner's vulnerability triggers.
+ * Single-select pill screen asking what the user does when a fight
+ * goes in circles. Maps to demand/withdraw cycle role identification.
  */
 
 import React from 'react';
@@ -18,12 +17,10 @@ import { selectionTap } from '../../utils/haptics';
 
 const AnimatedPressable = Animated.createAnimatedComponent(Pressable);
 
-const CONFLICT_OPTIONS = [
-  { id: 'unheard', label: 'Feeling unheard or dismissed' },
-  { id: 'blamed', label: 'Being blamed or criticized' },
-  { id: 'abandoned', label: 'Feeling abandoned or shut out' },
-  { id: 'controlled', label: 'Feeling controlled or pressured' },
-  { id: 'misunderstood', label: 'Being misunderstood' },
+const PURSUE_WITHDRAW_OPTIONS = [
+  { id: 'push_harder', label: 'Push harder to get through to them' },
+  { id: 'pull_back', label: 'Pull back and need space' },
+  { id: 'depends', label: 'Depends on the fight' },
 ];
 
 /** Animated pill with spring scale on press */
@@ -56,7 +53,7 @@ function PillOption({ label, isSelected, onPress, testID }: {
       onPress={onPress}
       onPressIn={handlePressIn}
       onPressOut={handlePressOut}
-      accessibilityRole="checkbox"
+      accessibilityRole="radio"
       accessibilityState={{ checked: isSelected }}
     >
       <Text style={[styles.pillText, isSelected && styles.pillTextSelected]}>
@@ -66,31 +63,27 @@ function PillOption({ label, isSelected, onPress, testID }: {
   );
 }
 
-interface ConflictFeelingsScreenProps {
+interface PursueWithdrawScreenProps {
   onNext: () => void;
   onBack: () => void;
   progress: number;
 }
 
-export function ConflictFeelingsScreen({
+export function PursueWithdrawScreen({
   onNext,
   onBack,
   progress,
-}: ConflictFeelingsScreenProps) {
-  const selected = useOnboardingStore((s) => s.conflictFeelings);
+}: PursueWithdrawScreenProps) {
+  const selected = useOnboardingStore((s) => s.pursueWithdraw);
   const setField = useOnboardingStore((s) => s.setField);
 
-  const toggleOption = (id: string) => {
+  const selectOption = (id: string) => {
     selectionTap();
-    if (selected.includes(id)) {
-      setField('conflictFeelings', selected.filter((s) => s !== id));
-    } else {
-      setField('conflictFeelings', [...selected, id]);
-    }
+    setField('pursueWithdraw', id);
   };
 
   return (
-    <SafeArea style={{ backgroundColor: colors.bgPrimary }}>
+    <SafeArea testID="screen-root" style={{ backgroundColor: colors.bgPrimary }}>
       {/* Progress bar */}
       <View style={styles.progressTrack}>
         <View
@@ -105,26 +98,24 @@ export function ConflictFeelingsScreen({
       >
         <Container>
           <Animated.View entering={FadeInDown.duration(500).delay(200)}>
-            <Text style={styles.title}>
-              In a fight, what hurts most?
-            </Text>
-            <Text style={styles.subtitle}>
-              Select all that apply.
+            <Text style={styles.title} accessibilityRole="header">
+              When a fight goes in circles, you...
             </Text>
           </Animated.View>
 
           <View style={styles.pillContainer}>
-            {CONFLICT_OPTIONS.map((option, index) => {
-              const isSelected = selected.includes(option.id);
+            {PURSUE_WITHDRAW_OPTIONS.map((option, index) => {
+              const isSelected = selected === option.id;
               return (
                 <Animated.View
                   key={option.id}
                   entering={FadeInDown.duration(400).delay(300 + index * 80)}
                 >
                   <PillOption
+                    testID={`pill-${option.id}`}
                     label={option.label}
                     isSelected={isSelected}
-                    onPress={() => toggleOption(option.id)}
+                    onPress={() => selectOption(option.id)}
                   />
                 </Animated.View>
               );
@@ -138,6 +129,7 @@ export function ConflictFeelingsScreen({
           {selected.length > 0 && (
             <Animated.View entering={FadeInUp.springify().damping(14).duration(400)}>
               <Button
+                testID="cta-continue"
                 title="Continue"
                 onPress={onNext}
                 size="lg"
@@ -145,7 +137,7 @@ export function ConflictFeelingsScreen({
               />
             </Animated.View>
           )}
-          <Button title="Back" onPress={onBack} variant="ghost" size="sm" />
+          <Button testID="cta-back" title="Back" onPress={onBack} variant="ghost" size="sm" />
         </View>
       </View>
     </SafeArea>
@@ -175,11 +167,6 @@ const styles = StyleSheet.create({
     lineHeight: 38,
     color: colors.textPrimary,
     letterSpacing: -0.3,
-    marginBottom: spacing.sm,
-  },
-  subtitle: {
-    ...typography.body,
-    color: colors.textMuted,
     marginBottom: spacing.xl,
   },
   pillContainer: {

@@ -29,28 +29,26 @@ export class ReconnectionService {
   async getMessages(sessionId: string, userId: string) {
     const session = await this.prisma.session.findUniqueOrThrow({
       where: { id: sessionId },
-      include: { couple: true, commitment: true },
+      include: { couple: { include: { userA: true, userB: true } }, commitment: true, unpacking: true },
     });
 
-    const messages = await this.prisma.reconnectionMessage.findMany({
+    let messages = await this.prisma.reconnectionMessage.findMany({
       where: { sessionId },
       orderBy: { createdAt: 'asc' },
     });
 
-    // Determine whose turn it is
     const isUserA = userId === session.couple.userAId;
-    const lastMsg = messages.filter((m) => m.role !== 'ai').pop();
-    let isMyTurn: boolean;
 
-    if (!lastMsg) {
-      // No messages yet — User A goes first
-      isMyTurn = isUserA;
-    } else {
-      // Alternate turns: if last human message was from this user, it's partner's turn
-      const lastWasMe =
-        (lastMsg.role === 'user_a' && isUserA) ||
-        (lastMsg.role === 'user_b' && !isUserA);
-      isMyTurn = !lastWasMe;
+    // Both partners can always send — no strict turn-taking
+    const isMyTurn = true;
+
+    // If no messages yet, generate and save an AI opening message
+    if (messages.length === 0) {
+      const openingMessage = await this.generateOpeningMessage(session);
+      const aiMsg = await this.prisma.reconnectionMessage.create({
+        data: { sessionId, userId: null, role: 'ai', text: openingMessage },
+      });
+      messages.push(aiMsg);
     }
 
     return {
@@ -101,12 +99,59 @@ export class ReconnectionService {
       orderBy: { createdAt: 'asc' },
     });
 
+    // Fetch past session context for AI memory across sessions
+    let pastContext: string | null = null;
+    try {
+      const pastSessions = await this.prisma.session.findMany({
+        where: {
+          coupleId: session.coupleId,
+          status: 'resolved',
+          id: { not: sessionId },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 5,
+        include: { unpacking: true, commitment: true },
+      });
+
+      const sessionsWithUnpacking = pastSessions.filter(
+        (s) => s.unpacking && s.unpacking.surfaceConflict !== 'Pending AI unpacking',
+      );
+
+      if (sessionsWithUnpacking.length > 0) {
+        const lines: string[] = ['PAST SESSION HISTORY (most recent first):'];
+        for (const s of sessionsWithUnpacking) {
+          const dateStr = s.createdAt.toISOString().split('T')[0];
+          const topic = s.topic || s.unpacking!.surfaceConflict || 'unspecified';
+          const pattern = s.unpacking!.patternRecognition
+            ? s.unpacking!.patternRecognition.substring(0, 100)
+            : 'N/A';
+          const commitmentText = s.commitment?.text || 'None';
+          lines.push('');
+          lines.push(`Session (${dateStr}) — Topic: "${topic}"`);
+          lines.push(`Insight: ${s.unpacking!.surfaceConflict}`);
+          lines.push(`Pattern: ${pattern}`);
+          lines.push(`Commitment: ${commitmentText}`);
+        }
+        const result = lines.join('\n');
+        pastContext = result.length > 3600
+          ? result.substring(0, 3600) + '\n...(earlier sessions omitted for brevity)'
+          : result;
+      }
+    } catch {
+      // Non-blocking — proceed without past context
+    }
+
+    // Build couple profile from onboarding data for personality-aware mediation
+    const coupleOnboarding = (session.couple.onboardingData as Record<string, any>) || null;
+
     // Generate AI mediation response
     const aiResponse = await this.generateAIMediation(
       allMessages,
       session.unpacking,
       session.couple.userA?.name || 'Partner A',
       session.couple.userB?.name || 'Partner B',
+      pastContext,
+      coupleOnboarding,
     );
 
     // Save AI message
@@ -114,7 +159,7 @@ export class ReconnectionService {
       data: { sessionId, userId: null, role: 'ai', text: aiResponse },
     });
 
-    // Notify partner it's their turn
+    // Notify partner about new message
     if (partnerId) {
       const partnerInfo = await this.prisma.user.findUnique({
         where: { id: partnerId },
@@ -124,8 +169,8 @@ export class ReconnectionService {
         .send({
           userId: partnerId,
           type: 'reconnection_turn',
-          title: `${userName || 'Your partner'} shared their thoughts`,
-          body: "It's your turn to respond in the reconnection.",
+          title: `${userName || 'Your partner'} shared something`,
+          body: 'New message in your reconnection conversation.',
           pushToken: partnerInfo?.pushToken || undefined,
           email: partnerInfo?.email || undefined,
           channels: ['push'],
@@ -142,6 +187,8 @@ export class ReconnectionService {
     unpacking: any,
     partnerAName: string,
     partnerBName: string,
+    pastContext?: string | null,
+    coupleOnboarding?: Record<string, any> | null,
   ): Promise<string> {
     const conversationHistory = messages.map((m) => ({
       role: (m.role === 'ai' ? 'assistant' : 'user') as 'assistant' | 'user',
@@ -162,30 +209,60 @@ UNPACKING INSIGHTS (use these to guide the conversation):
 `
       : '';
 
+    const pastContextBlock = pastContext
+      ? `\n\nYou have context from this couple's previous sessions. Reference recurring patterns and past commitments when relevant. Build on previous insights — don't repeat them.\n\n${pastContext}\n`
+      : '';
+
+    // Count human messages to determine conversation stage
+    const humanMessageCount = messages.filter((m) => m.role !== 'ai').length;
+    const offlineNudge = humanMessageCount >= 6
+      ? `\nThe conversation has had ${humanMessageCount} messages. Gently suggest they continue this conversation in person or on a call — something like "You're making real progress. When you're ready, maybe take this to a call or sit down together — hearing each other's voice makes all the difference."`
+      : '';
+
+    // Build couple personality context from onboarding
+    let coupleProfileBlock = '';
+    if (coupleOnboarding) {
+      const a = coupleOnboarding.userA || {};
+      const b = coupleOnboarding.userB || {};
+      const lines: string[] = ['\nCOUPLE DYNAMICS (use silently to guide better — never reference directly):'];
+      if (a.communicationStyles?.length) lines.push(`- ${partnerAName} in conflict: ${a.communicationStyles.join(', ')}`);
+      if (a.conflictFeelings?.length) lines.push(`- ${partnerAName}'s raw spots: feeling ${a.conflictFeelings.join(', ')}`);
+      if (b.communicationStyles?.length) lines.push(`- ${partnerBName} in conflict: ${b.communicationStyles.join(', ')}`);
+      if (b.conflictFeelings?.length) lines.push(`- ${partnerBName}'s raw spots: feeling ${b.conflictFeelings.join(', ')}`);
+      lines.push('');
+      lines.push('USE THIS TO:');
+      lines.push('- If one partner withdraws, gently invite them back without pressure');
+      lines.push('- If one partner pursues, validate their need while creating space for the other');
+      lines.push('- Connect reactions to values: "That matters to you because..."');
+      lines.push('- Bridge the gap: help each partner see what the other is really asking for underneath their words');
+      if (lines.length > 2) coupleProfileBlock = lines.join('\n');
+    }
+
     const response = await this.openai.chat.completions.create({
       model: this.model,
       messages: [
         {
           role: 'system',
-          content: `You are a relationship mediator guiding ${partnerAName} and ${partnerBName} through a reconnection conversation. Both partners have already shared their perspectives privately, and you have insights from their individual sessions.
+          content: `You are "relate", a relationship mediator guiding ${partnerAName} and ${partnerBName} through a reconnection conversation. Both partners have already shared their perspectives privately, and you have insights from their individual sessions.
 
-${unpackingContext}
+${unpackingContext}${pastContextBlock}${coupleProfileBlock}
 
 YOUR ROLE:
 - Help them hear each other and find common ground
 - Validate both perspectives without taking sides
 - Guide them toward understanding, not winning
-- Keep prompts SHORT (1-2 sentences max)
-- After 3-4 exchanges from each partner, suggest they formulate a shared commitment/learning
+- Your goal is to help them reconnect enough to continue on their own, not to mediate every exchange
 
-RESPONSE RULES:
-- Address the person whose turn is NEXT (the one who hasn't spoken most recently)
+IMPORTANT RULES:
+- NEVER start your message with a name in brackets like "[${partnerAName}]:" or "[${partnerBName}]:" — you are "relate", speak directly without any name prefix. The UI already labels your messages.
+- Keep responses to 1-2 sentences maximum
+- After the conversation has 6+ messages from the partners, gently suggest they continue the conversation in person or on a call
+- Be warm and genuine, like a wise friend, not a therapist
 - Reference specific things they or their partner said
 - Never repeat the same prompt twice
 - Mix between: reflective questions, gentle challenges, bridging statements, and appreciation
 - If tension rises, slow things down: "Let's pause here. Take a breath."
-- If they're making progress, name it: "You're really hearing each other right now."
-- Keep it warm, genuine, and conversational — not clinical`,
+- If they're making progress, name it: "You're really hearing each other right now."${offlineNudge}`,
         },
         ...conversationHistory,
       ],
@@ -197,6 +274,54 @@ RESPONSE RULES:
       response.choices[0].message.content ||
       'Take a moment to reflect on what was just shared.'
     );
+  }
+
+  /**
+   * Generate an AI opening message for the reconnection conversation.
+   * Called when there are no messages yet — sets the tone and invites partners to begin.
+   */
+  private async generateOpeningMessage(session: any): Promise<string> {
+    const partnerAName = session.couple?.userA?.name || 'Partner A';
+    const partnerBName = session.couple?.userB?.name || 'Partner B';
+    const topic = session.topic || 'your recent conversation';
+
+    // If we have unpacking insights, reference them
+    let unpackingRef = '';
+    if (session.unpacking && session.unpacking.surfaceConflict !== 'Pending AI unpacking') {
+      unpackingRef = ` You both took the time to share your perspectives on "${session.unpacking.surfaceConflict}". That takes real courage.`;
+    }
+
+    try {
+      const response = await this.openai.chat.completions.create({
+        model: this.model,
+        messages: [
+          {
+            role: 'system',
+            content: `You are "relate", a warm relationship mediator. Generate a brief opening message (2-3 sentences) for a reconnection conversation between ${partnerAName} and ${partnerBName}.
+
+Context: They both privately shared their sides about "${topic}".${unpackingRef}
+
+RULES:
+- NEVER start with a name in brackets like "[${partnerAName}]:"
+- Acknowledge both partners are here and that sharing took courage
+- Reference the topic briefly
+- Invite them to start talking: "Who'd like to go first?"
+- Be warm and genuine, like a wise friend
+- Keep it to 2-3 sentences max`,
+          },
+          { role: 'user', content: 'Generate the opening message.' },
+        ],
+        temperature: 0.7,
+        max_tokens: 120,
+      });
+
+      return (
+        response.choices[0].message.content ||
+        `You both showed up, and that matters. You've each shared your side — now let's talk through this together. Who'd like to start?`
+      );
+    } catch {
+      return `You both showed up, and that matters. You've each shared your side — now let's talk through this together. Who'd like to start?`;
+    }
   }
 
   async generateCommitment(sessionId: string) {

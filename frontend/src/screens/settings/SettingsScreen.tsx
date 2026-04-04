@@ -39,6 +39,8 @@ import {
   Trash2,
   Heart,
   Mail,
+  Crown,
+  RotateCcw,
 } from 'lucide-react-native';
 import { SafeArea } from '../../components/layout/SafeArea';
 import { Header } from '../../components/layout/Header';
@@ -108,6 +110,16 @@ export function SettingsScreen() {
   const [crisisVisible, setCrisisVisible] = useState(false);
 
   const hasCoupleFormed = couple && couple.userBId;
+
+  const handleRestore = useCallback(async () => {
+    try {
+      const Purchases = require('react-native-purchases').default;
+      await Purchases.restorePurchases();
+      addToast('Purchases restored successfully', 'success');
+    } catch (err) {
+      addToast('No purchases to restore', 'info');
+    }
+  }, [addToast]);
 
   const doLogout = async () => {
     await logout();
@@ -197,6 +209,22 @@ export function SettingsScreen() {
             icon={<User size={20} color={colors.textSecondary} strokeWidth={1.8} />}
             label="Profile"
             onPress={() => navigation.navigate('Profile')}
+          />
+        </View>
+
+        {/* Subscription Section */}
+        <Text style={styles.sectionTitle}>Subscription</Text>
+        <View style={styles.section}>
+          <MenuItem
+            icon={<Crown size={20} color={colors.orangeMid} strokeWidth={1.8} />}
+            label="Manage Subscription"
+            onPress={() => navigation.navigate('Paywall')}
+            trailing={<Text style={styles.trailingText}>Free</Text>}
+          />
+          <MenuItem
+            icon={<RotateCcw size={20} color={colors.textSecondary} strokeWidth={1.8} />}
+            label="Restore Purchases"
+            onPress={handleRestore}
           />
         </View>
 

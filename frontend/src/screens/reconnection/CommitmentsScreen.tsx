@@ -14,7 +14,7 @@
  * from both partners, and completes the session when both agree.
  */
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
@@ -26,7 +26,14 @@ import {
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
-import Animated, { FadeInDown, FadeIn } from 'react-native-reanimated';
+import Animated, {
+  FadeInDown,
+  FadeIn,
+  useSharedValue,
+  useAnimatedStyle,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import {
   Check,
@@ -48,6 +55,93 @@ import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
 type Navigation = NativeStackNavigationProp<MainNavigatorParamList>;
 type CommitmentsRoute = RouteProp<MainNavigatorParamList, 'Commitments'>;
 
+/* ---- Celebration confetti ---- */
+const CONFETTI_COLORS = [
+  colors.orangeMid,
+  colors.orangeLight,
+  colors.orangeGlow,
+  '#FFF8F0',
+];
+
+interface ParticleConfig {
+  angle: number;
+  distance: number;
+  color: string;
+  size: number;
+  delay: number;
+}
+
+const PARTICLES: ParticleConfig[] = Array.from({ length: 15 }, (_, i) => ({
+  angle: (Math.PI * 2 * i) / 15 + (Math.random() - 0.5) * 0.5,
+  distance: 60 + Math.random() * 90,
+  color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+  size: 4 + Math.random() * 4,
+  delay: i * 60,
+}));
+
+/** A single animated confetti dot */
+function CelebrationParticle({ config, trigger }: { config: ParticleConfig; trigger: boolean }) {
+  const translateX = useSharedValue(0);
+  const translateY = useSharedValue(0);
+  const opacity = useSharedValue(1);
+  const scale = useSharedValue(1);
+
+  useEffect(() => {
+    if (trigger) {
+      const { angle, distance, delay } = config;
+      translateX.value = withDelay(delay, withTiming(Math.cos(angle) * distance, { duration: 1200 }));
+      translateY.value = withDelay(delay, withTiming(Math.sin(angle) * distance, { duration: 1200 }));
+      opacity.value = withDelay(delay, withTiming(0, { duration: 1200 }));
+      scale.value = withDelay(delay, withTiming(0, { duration: 1200 }));
+    }
+  }, [trigger, config, translateX, translateY, opacity, scale]);
+
+  const animatedStyle = useAnimatedStyle(() => ({
+    transform: [
+      { translateX: translateX.value },
+      { translateY: translateY.value },
+      { scale: scale.value },
+    ],
+    opacity: opacity.value,
+  }));
+
+  return (
+    <Animated.View
+      style={[
+        {
+          position: 'absolute',
+          width: config.size,
+          height: config.size,
+          borderRadius: config.size / 2,
+          backgroundColor: config.color,
+        },
+        animatedStyle,
+      ]}
+    />
+  );
+}
+
+/** Container that positions confetti particles at center and triggers them */
+function CelebrationBurst({ trigger }: { trigger: boolean }) {
+  if (!trigger) return null;
+
+  return (
+    <View style={celebrationStyles.container} pointerEvents="none">
+      {PARTICLES.map((p, i) => (
+        <CelebrationParticle key={i} config={p} trigger={trigger} />
+      ))}
+    </View>
+  );
+}
+
+const celebrationStyles = StyleSheet.create({
+  container: {
+    ...StyleSheet.absoluteFillObject,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+});
+
 export function CommitmentsScreen() {
   const navigation = useNavigation<Navigation>();
   const route = useRoute<CommitmentsRoute>();
@@ -68,6 +162,8 @@ export function CommitmentsScreen() {
   const [agreeing, setAgreeing] = useState(false);
   const [completing, setCompleting] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [showCelebration, setShowCelebration] = useState(false);
+  const celebrationTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const sessionDate = useMemo(() => formatDate(new Date().toISOString()), []);
 
@@ -94,11 +190,21 @@ export function CommitmentsScreen() {
     }
   };
 
+  // Clean up celebration timer on unmount
+  useEffect(() => {
+    return () => {
+      if (celebrationTimer.current) clearTimeout(celebrationTimer.current);
+    };
+  }, []);
+
   const handleSave = async () => {
     setCompleting(true);
     try {
       await completeReconnection();
       setSaved(true);
+      setShowCelebration(true);
+      // Unmount particles after animation completes (1.5s)
+      celebrationTimer.current = setTimeout(() => setShowCelebration(false), 1500);
       addToast('Learning saved. You are both growing.', 'success');
     } catch {
       addToast('Could not save learning yet.', 'error');
@@ -131,7 +237,7 @@ export function CommitmentsScreen() {
             <View style={styles.headerIconRow}>
               <Heart size={20} color={colors.orangeMid} fill={colors.orangeMid} />
             </View>
-            <Text style={styles.headerTitle}>Your Shared{'\n'}Learning</Text>
+            <Text style={styles.headerTitle} accessibilityRole="header">Your Shared{'\n'}Learning</Text>
             <Text style={styles.headerSubtitle}>
               Small commitments create lasting change.
             </Text>
@@ -172,6 +278,8 @@ export function CommitmentsScreen() {
                 onPress={handleAgree}
                 disabled={isLoading || !commitment || agreeing}
                 style={[styles.agreeBtn, (isLoading || !commitment) && styles.agreeBtnDisabled]}
+                accessibilityLabel="Agree to remember this learning"
+                accessibilityRole="button"
               >
                 <View style={styles.checkbox}>
                   <Check size={14} color={colors.textInverse} strokeWidth={3} />
@@ -215,10 +323,13 @@ export function CommitmentsScreen() {
             )}
 
             {saved && (
-              <Animated.View entering={FadeIn.duration(600)} style={styles.savedBadge}>
-                <Heart size={14} color={colors.success} fill={colors.success} />
-                <Text style={styles.savedText}>Both partners agreed. Learning saved.</Text>
-              </Animated.View>
+              <View style={styles.celebrationWrapper}>
+                <Animated.View entering={FadeIn.duration(600)} style={styles.savedBadge}>
+                  <Heart size={14} color={colors.success} fill={colors.success} />
+                  <Text style={styles.savedText}>Both partners agreed. Learning saved.</Text>
+                </Animated.View>
+                <CelebrationBurst trigger={showCelebration} />
+              </View>
             )}
           </Animated.View>
 
@@ -239,6 +350,8 @@ export function CommitmentsScreen() {
                 navigation.navigate('HomeTabs');
               }}
               style={styles.linkRow}
+              accessibilityLabel="View all learnings"
+              accessibilityRole="button"
             >
               <Text style={styles.linkText}>View All Learnings</Text>
               <ChevronRight size={16} color={colors.orangeMid} />
@@ -422,6 +535,10 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  celebrationWrapper: {
+    position: 'relative',
+    overflow: 'visible',
   },
   savedBadge: {
     flexDirection: 'row',

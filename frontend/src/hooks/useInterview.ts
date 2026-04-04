@@ -22,6 +22,7 @@ interface UseInterviewReturn {
   isTranscribing: boolean;
   isThinking: boolean;
   isComplete: boolean;
+  crisisDetected: boolean;
   sendTextResponse: (text: string) => Promise<void>;
   sendVoiceResponse: (audioUri: string) => Promise<void>;
   exitAndSaveDraft: () => Promise<void>;
@@ -36,6 +37,7 @@ export function useInterview(sessionId: string, partnerBOpeningMessage?: string,
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
+  const [crisisDetected, setCrisisDetected] = useState(false);
   const responsesRef = useRef<InterviewResponse[]>([]);
 
   useEffect(() => {
@@ -64,6 +66,7 @@ export function useInterview(sessionId: string, partnerBOpeningMessage?: string,
           );
           setMessages(restored);
           responsesRef.current = existing.responses as InterviewResponse[];
+
         } else {
           // Resume from draft
           const draft = existing.responses as InterviewResponse[];
@@ -159,7 +162,6 @@ export function useInterview(sessionId: string, partnerBOpeningMessage?: string,
         timestamp: new Date().toISOString(),
       };
       responsesRef.current = [...responsesRef.current, response];
-
       // Save draft after each response
       try {
         await saveDraft(sessionId, { responses: responsesRef.current });
@@ -174,9 +176,12 @@ export function useInterview(sessionId: string, partnerBOpeningMessage?: string,
           copy.completionMessage,
         );
         try {
-          await submitInterview(sessionId, {
+          const result = await submitInterview(sessionId, {
             responses: responsesRef.current,
           });
+          if (result.crisisDetected) {
+            setCrisisDetected(true);
+          }
           setIsComplete(true);
         } catch {
           addMessage(
@@ -267,6 +272,7 @@ export function useInterview(sessionId: string, partnerBOpeningMessage?: string,
     isTranscribing,
     isThinking,
     isComplete,
+    crisisDetected,
     sendTextResponse,
     sendVoiceResponse,
     exitAndSaveDraft,

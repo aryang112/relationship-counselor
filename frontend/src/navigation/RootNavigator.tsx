@@ -21,6 +21,8 @@ import { LoadingScreen } from '../components/feedback/LoadingScreen';
 import { AuthNavigator } from './AuthNavigator';
 import { OnboardingNavigator } from './OnboardingNavigator';
 import { MainNavigator } from './MainNavigator';
+import { navigationRef, navigateFromOutside } from './navigationRef';
+import { useDeepLinkStore } from '../store/deepLinkStore';
 import { colors } from '../theme/colors';
 import { DefaultTheme } from '@react-navigation/native';
 
@@ -64,6 +66,21 @@ export function RootNavigator() {
       // Intentionally no-op if endpoint is unavailable.
     });
   }, [expoPushToken, isAuthenticated]);
+
+  // Consume any pending deep link after user becomes authenticated.
+  useEffect(() => {
+    if (!isAuthenticated || !onboardingDone) return;
+
+    const pending = useDeepLinkStore.getState().consumePendingDeepLink();
+    if (!pending) return;
+
+    // Small delay to ensure MainNavigator is mounted and nav is ready.
+    const timer = setTimeout(() => {
+      navigateFromOutside(pending.screen, pending.params);
+    }, 300);
+
+    return () => clearTimeout(timer);
+  }, [isAuthenticated, onboardingDone]);
 
   if (isLoading) {
     return <LoadingScreen message="Loading..." />;

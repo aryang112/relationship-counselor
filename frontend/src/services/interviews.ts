@@ -14,8 +14,8 @@ export async function getInterview(sessionId: string): Promise<Interview> {
 export async function submitInterview(
   sessionId: string,
   data: SubmitInterviewRequest,
-): Promise<Interview> {
-  const res = await api.post<Interview>(`/sessions/${sessionId}/interview`, data);
+): Promise<Interview & { crisisDetected?: boolean }> {
+  const res = await api.post<Interview & { crisisDetected?: boolean }>(`/sessions/${sessionId}/interview`, data);
   return res.data;
 }
 

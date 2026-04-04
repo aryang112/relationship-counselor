@@ -8,6 +8,7 @@ type UnpackingJobData = {
   partnerBInterviewId: string;
   partnerAResponses: Record<string, any>;
   partnerBResponses: Record<string, any>;
+  pastContext?: string;
 };
 
 @Injectable()

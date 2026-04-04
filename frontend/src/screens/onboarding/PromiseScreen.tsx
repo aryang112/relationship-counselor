@@ -68,7 +68,7 @@ export function PromiseScreen({ onContinue }: PromiseScreenProps) {
 
         {/* Promise text */}
         <Animated.View style={[styles.textContainer, textStyle]}>
-          <Text style={styles.heroText}>
+          <Text style={styles.heroText} accessibilityRole="header">
             {'This is a space where '}
             <Text style={styles.heroItalic}>both of you</Text>
             {' are heard.'}

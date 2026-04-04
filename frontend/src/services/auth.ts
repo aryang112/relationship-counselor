@@ -10,6 +10,7 @@ import type {
   RecordConsentResponse,
   ConsentStatusResponse,
 } from '../types/api';
+import type { SubscriptionStatus } from '../types/subscription';
 
 export async function register(data: RegisterRequest): Promise<AuthResponse> {
   const res = await api.post<AuthResponse>('/auth/register', data);
@@ -91,5 +92,10 @@ export async function recordAiConsent(): Promise<{ message: string; aiConsentAgr
 
 export async function deleteAccount(reason?: string): Promise<{ message: string }> {
   const res = await api.delete('/auth/account', { data: { reason } });
+  return res.data;
+}
+
+export async function getSubscriptionStatus(): Promise<SubscriptionStatus> {
+  const res = await api.get<SubscriptionStatus>('/auth/subscription');
   return res.data;
 }

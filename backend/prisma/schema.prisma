@@ -29,6 +29,12 @@ model User {
   dateOfBirthConfirmed  Boolean   @default(false) @map("date_of_birth_confirmed")
   isMinorFlagged        Boolean   @default(false) @map("is_minor_flagged")
 
+  // Subscription
+  subscriptionTier        String    @default("free") @map("subscription_tier") @db.VarChar(20) // free, premium
+  subscriptionExpiresAt   DateTime? @map("subscription_expires_at")
+  revenuecatId            String?   @map("revenuecat_id") @db.VarChar(100)
+  resolvedSessionCount    Int       @default(0) @map("resolved_session_count")
+
   // Push notifications
   pushToken             String?   @map("push_token")
 
@@ -51,6 +57,7 @@ model Couple {
   inviteToken       String?  @unique @map("invite_token")
   datingStartDate   String?  @map("dating_start_date")
   onboardingData    Json?    @map("onboarding_data")
+  loveBankEntries   Json?    @default("[]") @map("love_bank_entries")
   userASignedAt     DateTime? @map("user_a_signed_at")
   userBSignedAt     DateTime? @map("user_b_signed_at")
   createdAt         DateTime @default(now()) @map("created_at")

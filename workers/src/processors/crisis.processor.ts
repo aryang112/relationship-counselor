@@ -37,8 +37,13 @@ export class CrisisProcessor {
         concerns: detection.concerns,
       });
 
-      // TODO: Trigger alert system (email, notification, etc.)
-      // This could be another queue or direct notification
+      // Structured log for monitoring (Sentry/DataDog picks this up in production)
+      console.log('[CRISIS ALERT]', {
+        sessionId,
+        userId,
+        severity: detection.severity,
+        concerns: detection.concerns,
+      });
     }
 
     return {

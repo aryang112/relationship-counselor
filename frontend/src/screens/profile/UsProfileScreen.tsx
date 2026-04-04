@@ -13,13 +13,14 @@
  * Used as the "Us" tab in bottom navigation and also accessible from the stack.
  */
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   Pressable,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -45,6 +46,14 @@ import { colors, fontFamilies, typography, spacing, radius, shadows } from '../.
 import { useAuthStore } from '../../store/authStore';
 import { useSessionList } from '../../hooks/useSession';
 import { formatDate } from '../../utils/format';
+import {
+  getCoupleStats,
+  getLoveBank,
+  getLearnings,
+  type CoupleStatsResponse,
+  type LoveBankEntryResponse,
+  type LearningResponse,
+} from '../../services/couples';
 import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
 
 type Navigation = NativeStackNavigationProp<MainNavigatorParamList>;
@@ -62,7 +71,35 @@ export function UsProfileScreen() {
     : (couple?.userA?.name || 'Partner');
   const togetherSince = couple?.datingStartDate || (couple?.createdAt ? formatDate(couple.createdAt) : 'Recently');
 
-  const togetherDays = useMemo(() => {
+  // ─── API-driven stats ─────────────────────────────────────────────
+  const [apiStats, setApiStats] = useState<CoupleStatsResponse | null>(null);
+  const [loveBankEntries, setLoveBankEntries] = useState<LoveBankEntryResponse[]>([]);
+  const [apiLearnings, setApiLearnings] = useState<LearningResponse[]>([]);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      try {
+        const [statsData, lbData, learnData] = await Promise.all([
+          getCoupleStats().catch(() => null),
+          getLoveBank().catch(() => []),
+          getLearnings().catch(() => []),
+        ]);
+        if (!cancelled) {
+          setApiStats(statsData);
+          setLoveBankEntries(lbData);
+          setApiLearnings(learnData);
+        }
+      } finally {
+        if (!cancelled) setStatsLoading(false);
+      }
+    }
+    load();
+    return () => { cancelled = true; };
+  }, []);
+
+  const localTogetherDays = useMemo(() => {
     const dateStr = couple?.datingStartDate || couple?.createdAt;
     if (!dateStr) return null;
     const parsed = new Date(dateStr);
@@ -70,15 +107,25 @@ export function UsProfileScreen() {
     return Math.max(0, Math.floor((Date.now() - parsed.getTime()) / (1000 * 60 * 60 * 24)));
   }, [couple?.datingStartDate, couple?.createdAt]);
 
+  const togetherDays = apiStats?.togetherSinceDays ?? localTogetherDays;
+
   const stats = useMemo(() => {
+    if (apiStats) {
+      return {
+        mediationsCompleted: apiStats.sessionsCompleted,
+        commitmentsKept: apiStats.commitmentsKept,
+        daysSinceLastSession: apiStats.daysSinceLastSession,
+      };
+    }
+    // Fallback to local computation if API failed
     const resolvedSessions = sessions.filter(s => s.status === 'resolved');
     const mediations = resolvedSessions.length;
-    const lastSession = sessions[0]; // most recent regardless of status
+    const lastSession = sessions[0];
     const daysSince = lastSession
       ? Math.floor((Date.now() - new Date(lastSession.createdAt).getTime()) / (1000 * 60 * 60 * 24))
       : null;
     return { mediationsCompleted: mediations, commitmentsKept: 0, daysSinceLastSession: daysSince };
-  }, [sessions]);
+  }, [apiStats, sessions]);
 
   return (
     <View style={styles.container}>
@@ -97,6 +144,8 @@ export function UsProfileScreen() {
           <Pressable
             onPress={() => navigation.navigate('Settings')}
             style={styles.settingsBtn}
+            accessibilityLabel="Open settings"
+            accessibilityRole="button"
           >
             <Settings size={22} color={colors.textInverse} strokeWidth={1.8} />
           </Pressable>
@@ -114,7 +163,7 @@ export function UsProfileScreen() {
 
           {/* Names */}
           <Animated.View entering={FadeInDown.delay(300).duration(500)}>
-            <Text style={styles.heroTitle}>{userName} & {partnerName}</Text>
+            <Text style={styles.heroTitle} accessibilityRole="header">{userName} & {partnerName}</Text>
             <Text style={styles.heroSubtitle}>Together since {togetherSince}</Text>
           </Animated.View>
 
@@ -157,7 +206,21 @@ export function UsProfileScreen() {
           {/* Love Bank section */}
           <Animated.View entering={FadeInDown.delay(600).duration(500)}>
             <Text style={styles.sectionTitle}>Your Love Bank</Text>
-            <Text style={styles.emptyHint}>No moments yet</Text>
+            {loveBankEntries.length > 0 ? (
+              <Pressable onPress={() => navigation.navigate('LoveBank')} accessibilityLabel="View love bank" accessibilityRole="button">
+                <Card style={styles.previewCard} elevated>
+                  <Heart size={14} color={colors.orangeLight} fill={colors.orangeLight} />
+                  <Text style={styles.previewText} numberOfLines={2}>
+                    {loveBankEntries[0].text}
+                  </Text>
+                  <Text style={styles.previewCount}>
+                    {loveBankEntries.length} moment{loveBankEntries.length !== 1 ? 's' : ''} saved
+                  </Text>
+                </Card>
+              </Pressable>
+            ) : (
+              <Text style={styles.emptyHint}>No moments yet</Text>
+            )}
             <Button
               title="Add a moment"
               variant="secondary"
@@ -171,7 +234,21 @@ export function UsProfileScreen() {
           {/* Shared Learnings section */}
           <Animated.View entering={FadeInDown.delay(700).duration(500)}>
             <Text style={styles.sectionTitle}>Shared Learnings</Text>
-            <Text style={styles.emptyHint}>Complete your first session to see learnings here.</Text>
+            {apiLearnings.length > 0 ? (
+              <Pressable onPress={() => navigation.navigate('LearningsHistory')} accessibilityLabel="View shared learnings" accessibilityRole="button">
+                <Card style={styles.previewCard} elevated>
+                  <Sparkles size={14} color={colors.orangeMid} />
+                  <Text style={styles.previewText} numberOfLines={2}>
+                    {apiLearnings[0].text}
+                  </Text>
+                  <Text style={styles.previewCount}>
+                    {apiLearnings.length} learning{apiLearnings.length !== 1 ? 's' : ''} saved
+                  </Text>
+                </Card>
+              </Pressable>
+            ) : (
+              <Text style={styles.emptyHint}>Complete your first session to see learnings here.</Text>
+            )}
           </Animated.View>
 
           {/* Your Story section */}
@@ -187,7 +264,7 @@ export function UsProfileScreen() {
                   </Text>
                 </View>
               </View>
-              <Pressable style={styles.addStoryLink}>
+              <Pressable style={styles.addStoryLink} accessibilityLabel="Add your story details" accessibilityRole="button">
                 <Plus size={14} color={colors.orangeMid} />
                 <Text style={styles.addStoryText}>Add your story details</Text>
               </Pressable>
@@ -248,7 +325,7 @@ function BottomLink({
   onPress: () => void;
 }) {
   return (
-    <Pressable onPress={onPress} style={styles.bottomLinkRow}>
+    <Pressable onPress={onPress} style={styles.bottomLinkRow} accessibilityLabel={label} accessibilityRole="button">
       {icon}
       <Text style={styles.bottomLinkText}>{label}</Text>
       <ChevronRight size={14} color={colors.textMuted} />
@@ -366,7 +443,7 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
   },
 
-  // ---- Love Bank ----
+  // ---- Love Bank / Learnings ----
   addMomentBtn: {
     alignSelf: 'flex-start',
     marginTop: 12,
@@ -377,6 +454,23 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: colors.textMuted,
     fontStyle: 'italic',
+  },
+  previewCard: {
+    gap: 8,
+    padding: 16,
+    marginBottom: 4,
+  },
+  previewText: {
+    fontFamily: fontFamilies.displayItalic,
+    fontSize: 15,
+    lineHeight: 22,
+    color: colors.textPrimary,
+    fontStyle: 'italic',
+  },
+  previewCount: {
+    fontFamily: fontFamilies.body,
+    fontSize: 12,
+    color: colors.textMuted,
   },
 
   // ---- Story ----
@@ -409,6 +503,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+    minHeight: 44,
   },
   addStoryText: {
     fontFamily: fontFamilies.body,

@@ -64,6 +64,8 @@ export class AuthService {
         email: user.email,
         name: user.name,
         gender: user.gender,
+        subscriptionTier: user.subscriptionTier,
+        resolvedSessionCount: user.resolvedSessionCount,
       },
     };
   }
@@ -99,6 +101,8 @@ export class AuthService {
         email: user.email,
         name: user.name,
         gender: user.gender,
+        subscriptionTier: user.subscriptionTier,
+        resolvedSessionCount: user.resolvedSessionCount,
       },
     };
   }
@@ -259,6 +263,87 @@ export class AuthService {
       email: user.email,
       name: user.name,
       gender: user.gender,
+      subscriptionTier: user.subscriptionTier,
+      resolvedSessionCount: user.resolvedSessionCount,
     };
+  }
+
+  /**
+   * Returns the current subscription status for a user.
+   * Checks if premium is still active based on expiration date.
+   */
+  async getSubscriptionStatus(userId: string) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: {
+        subscriptionTier: true,
+        subscriptionExpiresAt: true,
+        resolvedSessionCount: true,
+      },
+    });
+
+    if (!user) throw new NotFoundException('User not found');
+
+    const isActive = user.subscriptionTier === 'premium' &&
+      (!user.subscriptionExpiresAt || user.subscriptionExpiresAt > new Date());
+
+    const freeSessionsRemaining = Math.max(0, 2 - user.resolvedSessionCount);
+
+    return {
+      tier: isActive ? 'premium' : 'free',
+      expiresAt: user.subscriptionExpiresAt?.toISOString() ?? null,
+      resolvedSessionCount: user.resolvedSessionCount,
+      freeSessionsRemaining,
+      isActive,
+    };
+  }
+
+  /**
+   * Verifies and activates a subscription from RevenueCat.
+   * Supports 'premium' (monthly) and 'resolve_now' (single session unlock).
+   */
+  async verifySubscription(userId: string, dto: { revenuecatId: string; tier: string }) {
+    if (dto.tier === 'premium') {
+      // Set premium subscription (30 days from now for monthly)
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          subscriptionTier: 'premium',
+          subscriptionExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+          revenuecatId: dto.revenuecatId,
+        },
+      });
+      return { message: 'Premium subscription activated', tier: 'premium' };
+    } else if (dto.tier === 'resolve_now') {
+      // Grant one additional session by decrementing resolvedSessionCount
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: {
+          revenuecatId: dto.revenuecatId,
+          resolvedSessionCount: { decrement: 1 },
+        },
+      });
+      return { message: 'One additional session unlocked', tier: 'free' };
+    }
+
+    return { message: 'Unknown tier', tier: 'free' };
+  }
+
+  /**
+   * Restores a previously purchased subscription.
+   * In production, this would verify with RevenueCat's API.
+   */
+  async restoreSubscription(userId: string, dto: { revenuecatId: string }) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { subscriptionTier: true, subscriptionExpiresAt: true },
+    });
+
+    if (user?.subscriptionTier === 'premium' && user.subscriptionExpiresAt && user.subscriptionExpiresAt > new Date()) {
+      return { restored: true, tier: 'premium', expiresAt: user.subscriptionExpiresAt.toISOString() };
+    }
+
+    // TODO: Query RevenueCat API to check for active subscriptions
+    return { restored: false, tier: 'free', expiresAt: null };
   }
 }

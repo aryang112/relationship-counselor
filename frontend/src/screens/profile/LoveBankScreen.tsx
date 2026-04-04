@@ -12,7 +12,7 @@
  * that the couple wants to remember and celebrate.
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import {
   Pressable,
   TextInput,
   Alert,
+  ActivityIndicator,
 } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -41,47 +42,63 @@ import { Button } from '../../components/ui/Button';
 import { KeyboardDoneBar, KEYBOARD_DONE_ID } from '../../components/ui/KeyboardDoneBar';
 import { colors, fontFamilies, typography, spacing, radius, shadows } from '../../theme';
 import { formatDate } from '../../utils/format';
+import {
+  getLoveBank,
+  addLoveBankEntry,
+  deleteLoveBankEntry,
+  type LoveBankEntryResponse,
+} from '../../services/couples';
 import type { MainNavigatorParamList } from '../../navigation/MainNavigator';
 
 type Navigation = NativeStackNavigationProp<MainNavigatorParamList>;
 
-/**
- * Love bank entry data model.
- * In production this would come from the API.
- */
+/** Local entry shape used by the screen (maps API createdAt to date). */
 interface LoveBankEntry {
   id: string;
   text: string;
   date: string;
 }
 
-/** Placeholder seed data -- would be fetched from API in production. */
-const INITIAL_ENTRIES: LoveBankEntry[] = [
-  { id: '1', text: 'Made breakfast together on Sunday', date: '2026-03-05T10:00:00Z' },
-  { id: '2', text: 'Long walk in the park, talked about dreams', date: '2026-03-01T14:00:00Z' },
-  { id: '3', text: 'Surprise flowers after a hard week', date: '2026-02-20T18:00:00Z' },
-  { id: '4', text: 'Stayed up late laughing about old photos', date: '2026-02-14T22:00:00Z' },
-];
-
 export function LoveBankScreen() {
   const navigation = useNavigation<Navigation>();
-  const [entries, setEntries] = useState<LoveBankEntry[]>(INITIAL_ENTRIES);
+  const [entries, setEntries] = useState<LoveBankEntry[]>([]);
+  const [loading, setLoading] = useState(true);
   const [newText, setNewText] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editText, setEditText] = useState('');
 
-  /** Add a new love bank entry. */
-  const handleAdd = () => {
+  /** Fetch love bank entries from API on mount. */
+  const fetchEntries = useCallback(async () => {
+    try {
+      const data = await getLoveBank();
+      setEntries(data.map((e) => ({ id: e.id, text: e.text, date: e.createdAt })));
+    } catch (err) {
+      console.warn('[LoveBank] Failed to fetch entries:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchEntries();
+  }, [fetchEntries]);
+
+  /** Add a new love bank entry via API. */
+  const handleAdd = async () => {
     if (!newText.trim()) return;
-    const entry: LoveBankEntry = {
-      id: `${Date.now()}`,
-      text: newText.trim(),
-      date: new Date().toISOString(),
-    };
-    setEntries((prev) => [entry, ...prev]);
-    setNewText('');
-    setShowForm(false);
+    try {
+      const newEntry = await addLoveBankEntry(newText.trim());
+      setEntries((prev) => [
+        { id: newEntry.id, text: newEntry.text, date: newEntry.createdAt },
+        ...prev,
+      ]);
+      setNewText('');
+      setShowForm(false);
+    } catch (err) {
+      console.warn('[LoveBank] Failed to add entry:', err);
+      Alert.alert('Error', 'Could not save your moment. Please try again.');
+    }
   };
 
   /** Delete a love bank entry with confirmation. */
@@ -94,19 +111,27 @@ export function LoveBankScreen() {
         {
           text: 'Remove',
           style: 'destructive',
-          onPress: () => setEntries((prev) => prev.filter((e) => e.id !== id)),
+          onPress: async () => {
+            try {
+              await deleteLoveBankEntry(id);
+              setEntries((prev) => prev.filter((e) => e.id !== id));
+            } catch (err) {
+              console.warn('[LoveBank] Failed to delete entry:', err);
+              Alert.alert('Error', 'Could not remove the moment. Please try again.');
+            }
+          },
         },
       ],
     );
   };
 
-  /** Start editing an entry. */
+  /** Start editing an entry (local-only edit — keeps existing text). */
   const startEdit = (entry: LoveBankEntry) => {
     setEditingId(entry.id);
     setEditText(entry.text);
   };
 
-  /** Save edited entry. */
+  /** Save edited entry (local-only — full edit API not implemented). */
   const saveEdit = () => {
     if (!editText.trim() || !editingId) return;
     setEntries((prev) =>
@@ -131,17 +156,25 @@ export function LoveBankScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Pressable onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Pressable onPress={() => navigation.goBack()} style={styles.backBtn} accessibilityLabel="Go back" accessibilityRole="button">
             <ArrowLeft size={20} color={colors.textPrimary} />
           </Pressable>
           <View style={styles.headerTextBlock}>
             <Heart size={20} color={colors.orangeMid} fill={colors.orangeLight} />
-            <Text style={styles.screenTitle}>Your Love Bank</Text>
+            <Text style={styles.screenTitle} accessibilityRole="header">Your Love Bank</Text>
             <Text style={styles.screenSubtitle}>
               The little moments that make you, you.
             </Text>
           </View>
         </View>
+
+        {/* Loading state */}
+        {loading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="small" color={colors.orangeMid} />
+            <Text style={styles.loadingText}>Loading moments...</Text>
+          </View>
+        )}
 
         {/* Add moment button / form */}
         {!showForm ? (
@@ -149,6 +182,8 @@ export function LoveBankScreen() {
             <Pressable
               onPress={() => setShowForm(true)}
               style={styles.addTrigger}
+              accessibilityLabel="Add a moment"
+              accessibilityRole="button"
             >
               <LinearGradient
                 colors={colors.gradientSoft}
@@ -216,10 +251,10 @@ export function LoveBankScreen() {
                       inputAccessoryViewID={KEYBOARD_DONE_ID}
                     />
                     <View style={styles.editActions}>
-                      <Pressable onPress={cancelEdit} style={styles.editBtn}>
+                      <Pressable onPress={cancelEdit} style={styles.editBtn} accessibilityLabel="Cancel edit" accessibilityRole="button">
                         <X size={16} color={colors.textMuted} />
                       </Pressable>
-                      <Pressable onPress={saveEdit} style={styles.editBtn}>
+                      <Pressable onPress={saveEdit} style={styles.editBtn} accessibilityLabel="Save edit" accessibilityRole="button">
                         <Check size={16} color={colors.success} />
                       </Pressable>
                     </View>
@@ -233,10 +268,10 @@ export function LoveBankScreen() {
                     </View>
                     <Text style={styles.entryText}>{entry.text}</Text>
                     <View style={styles.entryActions}>
-                      <Pressable onPress={() => startEdit(entry)} style={styles.actionBtn}>
+                      <Pressable onPress={() => startEdit(entry)} style={styles.actionBtn} accessibilityLabel="Edit moment" accessibilityRole="button">
                         <Edit3 size={14} color={colors.textMuted} />
                       </Pressable>
-                      <Pressable onPress={() => handleDelete(entry.id)} style={styles.actionBtn}>
+                      <Pressable onPress={() => handleDelete(entry.id)} style={styles.actionBtn} accessibilityLabel="Delete moment" accessibilityRole="button">
                         <Trash2 size={14} color={colors.error} />
                       </Pressable>
                     </View>
@@ -248,7 +283,7 @@ export function LoveBankScreen() {
         </View>
 
         {/* Empty state */}
-        {entries.length === 0 && (
+        {!loading && entries.length === 0 && (
           <View style={styles.emptyState}>
             <Heart size={40} color={colors.orangeLight} />
             <Text style={styles.emptyTitle}>No moments yet</Text>
@@ -266,6 +301,18 @@ const styles = StyleSheet.create({
   scrollContent: {
     paddingHorizontal: 24,
     paddingBottom: 40,
+  },
+
+  // ---- Loading ----
+  loadingContainer: {
+    alignItems: 'center',
+    paddingVertical: 40,
+    gap: 12,
+  },
+  loadingText: {
+    fontFamily: fontFamilies.body,
+    fontSize: 14,
+    color: colors.textMuted,
   },
 
   // ---- Header ----
@@ -376,11 +423,11 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   actionBtn: {
-    width: 32,
-    height: 32,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 16,
+    borderRadius: 22,
     backgroundColor: colors.bgPrimary,
   },
 
@@ -406,11 +453,11 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   editBtn: {
-    width: 36,
-    height: 36,
+    width: 44,
+    height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 18,
+    borderRadius: 22,
     backgroundColor: colors.bgPrimary,
   },
 

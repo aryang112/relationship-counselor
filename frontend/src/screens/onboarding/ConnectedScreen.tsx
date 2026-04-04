@@ -14,8 +14,11 @@ import Animated, {
   withDelay,
   withSpring,
   withTiming,
+  withRepeat,
+  withSequence,
   Easing,
-  FadeInDown,
+  FadeIn,
+  FadeInUp,
 } from 'react-native-reanimated';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeArea } from '../../components/layout/SafeArea';
@@ -40,6 +43,7 @@ export function ConnectedScreen({ onBegin }: ConnectedScreenProps) {
   const avatarBScale = useSharedValue(0);
   const heartScale = useSharedValue(0);
   const heartOpacity = useSharedValue(0);
+  const heartPulse = useSharedValue(1);
 
   useEffect(() => {
     successTap();
@@ -60,6 +64,18 @@ export function ConnectedScreen({ onBegin }: ConnectedScreenProps) {
       700,
       withTiming(1, { duration: 400, easing: Easing.out(Easing.cubic) }),
     );
+
+    // Gentle breathing pulse on the heart after it appears
+    heartPulse.value = withDelay(
+      1200,
+      withRepeat(
+        withSequence(
+          withTiming(1.15, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+          withTiming(1.0, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+        ),
+        -1,
+      ),
+    );
   }, []);
 
   const avatarAStyle = useAnimatedStyle(() => ({
@@ -71,7 +87,7 @@ export function ConnectedScreen({ onBegin }: ConnectedScreenProps) {
   }));
 
   const heartStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: heartScale.value }],
+    transform: [{ scale: heartScale.value * heartPulse.value }],
     opacity: heartOpacity.value,
   }));
 
@@ -79,7 +95,10 @@ export function ConnectedScreen({ onBegin }: ConnectedScreenProps) {
     <SafeArea style={{ backgroundColor: colors.bgPrimary }}>
       <Container style={styles.container}>
         {/* Avatar pair with heart */}
-        <View style={styles.avatarRow}>
+        <Animated.View
+          entering={FadeInUp.duration(600).delay(300).springify().damping(14)}
+          style={styles.avatarRow}
+        >
           <Animated.View style={[styles.avatar, styles.avatarA, avatarAStyle]}>
             <Text style={styles.avatarInitial}>
               {firstName.charAt(0).toUpperCase()}
@@ -95,11 +114,13 @@ export function ConnectedScreen({ onBegin }: ConnectedScreenProps) {
               {partnerName.charAt(0).toUpperCase()}
             </Text>
           </Animated.View>
-        </View>
+        </Animated.View>
 
         {/* Connected text */}
-        <Animated.View entering={FadeInDown.duration(600).delay(900)}>
-          <Text style={styles.title}>You're connected.</Text>
+        <Animated.View entering={FadeIn.duration(800)}>
+          <Text style={styles.title} accessibilityRole="header">You're connected.</Text>
+        </Animated.View>
+        <Animated.View entering={FadeIn.duration(600).delay(600)}>
           <Text style={styles.subtitle}>
             {firstName} & {partnerName} are ready to start understanding each
             other better.
@@ -107,7 +128,7 @@ export function ConnectedScreen({ onBegin }: ConnectedScreenProps) {
         </Animated.View>
 
         {/* Stats card */}
-        <Animated.View entering={FadeInDown.duration(600).delay(1200)}>
+        <Animated.View entering={FadeIn.duration(600).delay(600)}>
           <Card elevated style={styles.statsCard}>
             <View style={styles.statRow}>
               <View style={styles.stat}>
@@ -116,10 +137,8 @@ export function ConnectedScreen({ onBegin }: ConnectedScreenProps) {
               </View>
               <View style={styles.statDivider} />
               <View style={styles.stat}>
-                <Text style={styles.statValue}>
-                  {store.relationshipStrengths.length || '--'}
-                </Text>
-                <Text style={styles.statLabel}>Strengths</Text>
+                <Text style={styles.statValue}>8</Text>
+                <Text style={styles.statLabel}>Insights</Text>
               </View>
               <View style={styles.statDivider} />
               <View style={styles.stat}>
@@ -132,7 +151,7 @@ export function ConnectedScreen({ onBegin }: ConnectedScreenProps) {
 
         {/* Begin button */}
         <Animated.View
-          entering={FadeInDown.duration(600).delay(1500)}
+          entering={FadeInUp.duration(500).delay(800)}
           style={styles.actions}
         >
           <Button title="Begin" onPress={onBegin} size="lg" />

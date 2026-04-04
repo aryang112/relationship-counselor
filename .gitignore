@@ -58,5 +58,12 @@ logs/
 *.tmp
 .cache/
 
+# E2E test artifacts (reports, screenshots are ephemeral)
+e2e/reports/
+e2e/screenshots/
+e2e/.last-run-state
+dogfood-output/
+.agent-device/
+
 # Claude Code (user-specific agent memory)
 .claude/
